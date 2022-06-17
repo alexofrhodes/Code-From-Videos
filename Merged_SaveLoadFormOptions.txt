@@ -1,0 +1,195 @@
+''''''''''''''''''''''''''''''
+'Contains the following procedures #9
+''''''''''''''''''''''''''''''
+
+'SaveOptions
+'LoadOptions
+'CollectionToArray
+'CreateOrSetSheet
+'ListboxSelectedIndexes
+'WorksheetExists
+'sheetExists
+'IsInArray
+'SelectListboxItems
+
+Sub SaveOptions(FORM As Object, _
+                Optional includeCheckbox As Boolean = True, _
+                Optional includeOptionButton As Boolean = True, _
+                Optional includeTextBox As Boolean = True, _
+                Optional includeListbox As Boolean = True)
+'#INCLUDE CollectionToArray
+'#INCLUDE CreateOrSetSheet
+'#INCLUDE ListboxSelectedIndexes
+    Dim ws As Worksheet
+    Set ws = CreateOrSetSheet(FORM.Name & "_Settings", ThisWorkbook) ' change to activeworkbook for testing
+    ws.Cells.Clear
+    Dim coll As New Collection
+    Dim cell As Range
+    Set cell = ws.Cells(1, 1)
+    Dim c As MSForms.control
+    For Each c In FORM.Controls
+        If TypeName(c) Like "CheckBox" Then
+            If Not includeCheckbox Then GoTo SKIP
+        ElseIf TypeName(c) Like "OptionButton" Then
+            If Not includeOptionButton Then GoTo SKIP
+        ElseIf TypeName(c) Like "TextBox" Then
+            If Not includeTextBox Then GoTo SKIP
+        ElseIf TypeName(c) = "ListBox" Then
+            If Not includeListbox Then GoTo SKIP
+        Else
+            GoTo SKIP
+        End If
+        
+        cell = c.Name
+        Select Case TypeName(c)
+        Case "TextBox", "CheckBox", "OptionButton"
+            cell.Offset(0, 1) = c.Value
+        Case "ListBox"
+            Set coll = ListboxSelectedIndexes(c)
+            If coll.count > 0 Then
+                cell.Offset(0, 1) = Join(CollectionToArray(coll), ",")
+            Else
+                cell.Offset(0, 1) = -1
+            End If
+        End Select
+        
+        Set cell = cell.Offset(1, 0)
+SKIP:
+    Next
+End Sub
+
+Function CreateOrSetSheet(SheetName As String, TargetWorkbook As Workbook) As Worksheet
+    '#INCLUDE WorksheetExists
+'#INCLUDE sheetExists
+    Dim NewSheet As Worksheet
+    If WorksheetExists(SheetName, TargetWorkbook) = True Then
+        Set CreateOrSetSheet = TargetWorkbook.Sheets(SheetName)
+    Else
+        Set CreateOrSetSheet = TargetWorkbook.Sheets.Add
+        CreateOrSetSheet.Name = SheetName
+    End If
+End Function
+
+Function ListboxSelectedIndexes(LBox As MSForms.ListBox) As Collection
+    Dim i As Long
+    Dim SelectedIndexes As Collection
+    Set SelectedIndexes = New Collection
+    If LBox.ListCount > 0 Then
+        For i = 0 To LBox.ListCount - 1
+            If LBox.Selected(i) Then SelectedIndexes.Add i
+        Next i
+    End If
+    Set ListboxSelectedIndexes = SelectedIndexes
+End Function
+
+Function CollectionToArray(c As Collection) As Variant
+
+    Dim A() As Variant: ReDim A(0 To c.count - 1)
+    Dim i As Long
+    For i = 1 To c.count
+        A(i - 1) = c.Item(i)
+    Next
+    CollectionToArray = A
+End Function
+
+Function WorksheetExists(shtName As String, Optional wb As Workbook) As Boolean
+'#INCLUDE sheetExists
+    Dim sht As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook
+    End If
+    On Error Resume Next
+    Set sht = wb.Sheets(shtName)
+    On Error GoTo 0
+    WorksheetExists = Not sht Is Nothing
+End Function
+
+
+
+Function sheetExists(sheetToFind As String, Optional InWorkbook As Workbook) As Boolean
+    If InWorkbook Is Nothing Then Set InWorkbook = ThisWorkbook
+    On Error Resume Next
+    sheetExists = Not InWorkbook.Sheets(sheetToFind) Is Nothing
+End Function
+
+
+  
+Sub LoadOptions(FORM As Object, Optional ExcludeThese As Variant)
+'#INCLUDE CreateOrSetSheet
+'#INCLUDE IsInArray
+'#INCLUDE SelectListboxItems
+    Dim ws As Worksheet
+    Set ws = CreateOrSetSheet(FORM.Name & "_Settings", ThisWorkbook) ' change to activeworkbook for testing
+    If ws.Range("A1") = "" Then Exit Sub
+    Dim cell As Range
+    Set cell = ws.Cells(1, 1)
+    Dim c As MSForms.control
+    Dim v
+    On Error Resume Next
+    Do While cell <> ""
+        Set c = FORM.Controls(cell.Text)
+        If Not TypeName(c) = "Nothing " Then
+            If Not IsInArray(cell, ExcludeThese) Then
+                Select Case TypeName(c)
+                Case "TextBox", "CheckBox", "OptionButton"
+                    c.Value = cell.Offset(0, 1)
+                Case "ListBox"
+                    If InStr(1, cell.Offset(0, 1), ",") > 0 Then
+                        SelectListboxItems c, Split(cell.Offset(0, 1), ","), True
+                    Else
+                        c.Selected(CInt(cell.Offset(0, 1))) = True
+                    End If
+                End Select
+            End If
+        End If
+        Set cell = cell.Offset(1, 0)
+    Loop
+End Sub
+
+
+Public Function IsInArray( _
+       ByVal value1 As Variant, _
+       ByVal array1 As Variant, _
+       Optional CaseSensitive As Boolean) _
+        As Boolean
+    Dim individualElement As Variant
+    If CaseSensitive = True Then value1 = UCase(value1)
+    For Each individualElement In array1
+        If CaseSensitive = True Then individualElement = UCase(individualElement)
+        If individualElement = value1 Then
+            IsInArray = True
+            Exit Function
+        End If
+    Next
+    IsInArray = False
+End Function
+
+Function SelectListboxItems(LBox As MSForms.ListBox, FindMe As Variant, Optional ByIndex As Boolean)
+    Dim i As Long
+    Select Case TypeName(FindMe)
+    Case Is = "String", "Long", "Integer"
+        For i = 0 To LBox.ListCount - 1
+            If LBox.list(i) = CStr(FindMe) Then
+                LBox.Selected(i) = True
+                DoEvents
+                If LBox.MultiSelect = fmMultiSelectSingle Then Exit Function
+            End If
+        Next
+    Case Else
+        Dim el As Variant
+        If ByIndex Then
+            For Each el In FindMe
+                LBox.Selected(el) = True
+            Next
+        Else
+            For Each el In FindMe
+                For i = 0 To LBox.ListCount - 1
+                    If LBox.list(i) = el Then
+                        LBox.Selected(i) = True
+                        DoEvents
+                    End If
+                Next
+            Next
+        End If
+    End Select
+End Function
