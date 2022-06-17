@@ -1,0 +1,115 @@
+''''''''''''''''''''''''''''''
+'Contains the following procedures #8
+''''''''''''''''''''''''''''''
+'ActiveModule
+'CopyControlProperties
+'CreateOrSetSheet
+'SelectedControl
+'SelectedControls
+'WorksheetExists
+'sheetExists
+'PasteControlProperties
+
+
+
+Sub CopyControlProperties(Optional control As MSForms.control)
+'#INCLUDE Effect
+'#INCLUDE CreateOrSetSheet
+'#INCLUDE SelectedControl
+    If control Is Nothing Then Set control = SelectedControl
+    Dim ws As Worksheet: Set ws = CreateOrSetSheet("CopyControlProperties", ThisWorkbook)
+    Dim PropertiesArray As Variant
+    PropertiesArray = Array("Accelerator", "Alignment", "AutoSize", "AutoTab", "BackColor", "BackStyle", "BorderColor", "BorderStyle", "BoundColumn", _
+    "Caption", "Children", "columnCount", "ColumnHeads", "ColumnWidths", "ControlSource", "ControlTipText", "Cycle", "DrawBuffer", "Enabled", "EnterKeyBehavior", "Expanded", _
+    "FirstSibling", "FontBold", "FontSize", "ForeColor", "FullPath", "GroupName", "Height", "HelpContextID", "KeepScrollBarsVisible", "LargeChange", "LastSibling", "LineStyle", "ListRows", "Locked", _
+    "Max", "MaxLength", "Min", "MouseIcon", "MousePointer", "MultiLine", "MultiSelect", "Next", "Nodes", "Orientation", _
+    "Parent", "PasswordChar", "PathSeparator", "Picture", "PictureAlignment", "PictureSizeMode", "PictureTiling", "Previous", "RightToLeft", "Root", "RowSource", _
+    "ScrollBars", "ScrollHeight", "ScrollLeft", "ScrollTop", "ScrollWidth", "Selected", "SelectedItem", "ShowModal", "SmallChange", "Sorted", "SpecialEffect", "StartUpPosition", _
+    "Style", "Tag", "Text", "TextColumn", "TripleState", "WhatsThisHelp", "Width", "Zoom")
+    If ws.Range("A1") = "" Then ws.Range("A1").Resize(UBound(PropertiesArray) + 1) = WorksheetFunction.Transpose(PropertiesArray)
+    Dim PropertiesRange As Range: Set PropertiesRange = ws.Range("A1").CurrentRegion.Resize(, 1)
+    Dim Property As Range
+    On Error Resume Next
+    For Each Property In PropertiesRange
+        Property.Offset(0, 1) = CallByName(control, Property.Value, VbGet)
+    Next
+End Sub
+
+Sub PasteControlProperties(Optional Controls As Collection)
+'#INCLUDE SelectedControls
+    If Controls Is Nothing Then Set Controls = SelectedControls
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets("CopyControlProperties")
+    If ws.Columns(2).SpecialCells(xlCellTypeConstants).count = 0 Then
+        MsgBox "You haven't saved properties before"
+        Exit Sub
+    End If
+    Dim PropertiesRange As Range: Set PropertiesRange = ws.Range("A1").CurrentRegion.Resize(, 1)
+    Dim control As MSForms.control
+    Dim Property As Range
+    On Error Resume Next
+    For Each control In Controls
+        For Each Property In PropertiesRange
+            CallByName control, Property.Value, VbLet, Property.Offset(0, 1).Value
+        Next
+    Next
+End Sub
+
+Function CreateOrSetSheet(SheetName As String, TargetWorkbook As Workbook) As Worksheet
+    '#INCLUDE WorksheetExists
+    Dim NewSheet As Worksheet
+    If WorksheetExists(SheetName, TargetWorkbook) = True Then
+        Set CreateOrSetSheet = TargetWorkbook.Sheets(SheetName)
+    Else
+        Set CreateOrSetSheet = TargetWorkbook.Sheets.Add
+        CreateOrSetSheet.Name = SheetName
+    End If
+End Function
+
+Function SelectedControl() As MSForms.control
+
+    Dim Module As VBComponent
+    Set Module = ActiveModule
+    If SelectedControls.count = 1 Then
+        Dim ctl    As control
+        For Each ctl In ActiveModule.Designer.Selected
+            Set SelectedControl = ctl
+            Exit Function
+        Next ctl
+    End If
+End Function
+
+Function ActiveModule() As VBComponent
+    Set ActiveModule = Application.VBE.SelectedVBComponent
+End Function
+
+Function SelectedControls() As Collection
+    Dim ctl    As control
+    Dim out As New Collection
+    Dim Module As VBComponent
+    Set Module = ActiveModule
+    For Each ctl In Module.Designer.Selected
+        out.Add ctl
+    Next ctl
+    Set SelectedControls = out
+    Set out = Nothing
+End Function
+
+Function WorksheetExists(shtName As String, Optional wb As Workbook) As Boolean
+    Dim sht As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook
+    End If
+    On Error Resume Next
+    Set sht = wb.Sheets(shtName)
+    On Error GoTo 0
+    WorksheetExists = Not sht Is Nothing
+End Function
+
+
+Function sheetExists(sheetToFind As String, Optional InWorkbook As Workbook) As Boolean
+    If InWorkbook Is Nothing Then Set InWorkbook = ThisWorkbook
+    On Error Resume Next
+    sheetExists = Not InWorkbook.Sheets(sheetToFind) Is Nothing
+End Function
+
+
