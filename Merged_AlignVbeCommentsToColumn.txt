@@ -13,7 +13,7 @@
 '
 'NOTE! Use monospace Font like Consolas in vbeditor 
 '
-Sub AlignVbeCommentsToColumn(AlignAtColumn As Long)
+Sub AlignVbeCommentsToColumn(Optional AlignAtColumn As Long)
 '#INCLUDE Inject
 '#INCLUDE CodePaneSelectionStartLine
 '#INCLUDE CodePaneSelectionEndLine
@@ -26,6 +26,16 @@ Sub AlignVbeCommentsToColumn(AlignAtColumn As Long)
     Dim commentOriginalColumn As Long
     Dim LineText As String
     Dim i As Long
+    
+    Dim rightMostColumn As Long
+    For i = firstRow To lastRow
+        LineText = ActiveModule.CodeModule.Lines(i, 1)
+        commentOriginalColumn = InStrRev(LineText, "'")
+        If commentOriginalColumn > rightMostColumn Then rightMostColumn = commentOriginalColumn
+    Next
+    
+    If AlignAtColumn = 0 Then AlignAtColumn = rightMostColumn
+    
     Dim numberOfSpacesToInsert
     For i = firstRow To lastRow
     LineText = ActiveModule.CodeModule.Lines(i, 1)
