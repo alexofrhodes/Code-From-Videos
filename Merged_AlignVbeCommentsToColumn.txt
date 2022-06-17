@@ -1,0 +1,116 @@
+''''''''''''''''''''''''''''''
+'Contains the following procedures #9
+''''''''''''''''''''''''''''''
+'ActiveModule
+'AlignVbeCommentsToColumn
+'CodePaneSelectionEndLine
+'CodePaneSelectionSet
+'CodePaneSelectionStartLine
+'CodepaneSelection
+'Inject
+'PartAfterCodePaneSelection
+'PartBeforeCodePaneSelection
+'
+
+Sub AlignVbeCommentsToColumn(AlignAtColumn As Long)
+'#INCLUDE Inject
+'#INCLUDE CodePaneSelectionStartLine
+'#INCLUDE CodePaneSelectionEndLine
+'#INCLUDE CodePaneSelectionSet
+'#INCLUDE ActiveModule
+    Dim firstRow As Long
+        firstRow = CodePaneSelectionStartLine
+    Dim lastRow As Long
+        lastRow = CodePaneSelectionEndLine
+    Dim commentOriginalColumn As Long
+    Dim LineText As String
+    Dim i As Long
+    Dim numberOfSpacesToInsert
+    For i = firstRow To lastRow
+    LineText = ActiveModule.CodeModule.Lines(i, 1)
+    commentOriginalColumn = InStr(1, LineText, "'")
+        If commentOriginalColumn > 0 Then
+            
+            numberOfSpacesToInsert = AlignAtColumn - commentOriginalColumn
+            If numberOfSpacesToInsert > 0 Then
+                commentOriginalColumn = InStrRev(LineText, "'")
+                CodePaneSelectionSet i, commentOriginalColumn, i, commentOriginalColumn
+                Inject Space(numberOfSpacesToInsert)
+            End If
+        End If
+    Next
+End Sub
+
+Public Sub Inject(str As String)
+'#INCLUDE CodepaneSelection
+'#INCLUDE PartAfterCodePaneSelection
+'#INCLUDE PartBeforeCodePaneSelection
+    Dim StartLine As Long, StartColumn As Long, EndLine As Long, EndColumn As Long
+    Application.VBE.ActiveCodePane.GetSelection StartLine, StartColumn, EndLine, EndColumn
+    Dim Code As String
+    Code = CodepaneSelection
+    If Len(Code) > 0 Then Exit Sub
+    Code = PartBeforeCodePaneSelection(StartLine, StartColumn, EndLine, EndColumn) _
+      & str & _
+        PartAfterCodePaneSelection(StartLine, StartColumn, EndLine, EndColumn)
+    On Error Resume Next
+    Application.VBE.ActiveCodePane.CodeModule.DeleteLines StartLine, EndLine - StartLine + 1
+    Application.VBE.ActiveCodePane.CodeModule.InsertLines StartLine, Code
+End Sub
+
+Public Function CodePaneSelectionStartLine() As Long
+    Dim StartLine As Long, StartColumn As Long, EndLine As Long, EndColumn As Long
+    Application.VBE.ActiveCodePane.GetSelection StartLine, StartColumn, EndLine, EndColumn
+    CodePaneSelectionStartLine = StartLine
+End Function
+
+Public Function CodePaneSelectionEndLine() As Long
+    Dim StartLine As Long, StartColumn As Long, EndLine As Long, EndColumn As Long
+    Application.VBE.ActiveCodePane.GetSelection StartLine, StartColumn, EndLine, EndColumn
+    CodePaneSelectionEndLine = EndLine
+End Function
+
+Function CodePaneSelectionSet(StartLine As Long, StartColumn As Long, EndLine As Long, EndColumn As Long)
+    Application.VBE.ActiveCodePane.SetSelection StartLine, StartColumn, EndLine, EndColumn
+End Function
+
+
+
+Function ActiveModule() As VBComponent
+    Set ActiveModule = Application.VBE.SelectedVBComponent
+End Function
+
+Public Function CodepaneSelection() As String
+    Dim StartLine As Long, StartColumn As Long, EndLine As Long, EndColumn As Long
+    Application.VBE.ActiveCodePane.GetSelection StartLine, StartColumn, EndLine, EndColumn
+    If EndLine - StartLine = 0 Then
+        CodepaneSelection = Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(StartLine, 1), StartColumn, EndColumn - StartColumn)
+        Exit Function
+    End If
+    Dim str As String
+    Dim i As Long
+    For i = StartLine To EndLine
+        If str = "" Then
+            str = Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(i, 1), StartColumn)
+        ElseIf i < EndLine Then
+            str = str & vbNewLine & Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(i, 1), 1)
+        Else
+            str = str & vbNewLine & Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(i, 1), 1, EndColumn - 1)
+        End If
+    Next
+    CodepaneSelection = str
+End Function
+
+Public Function PartAfterCodePaneSelection(StartLine As Long, StartColumn As Long, EndLine As Long, EndColumn As Long)
+    Dim str As String
+    str = Application.VBE.ActiveCodePane.CodeModule.Lines(EndLine, 1)
+    str = Mid(str, EndColumn)
+    PartAfterCodePaneSelection = str
+End Function
+
+Public Function PartBeforeCodePaneSelection(StartLine As Long, StartColumn As Long, EndLine As Long, EndColumn As Long)
+    Dim str As String
+    str = Application.VBE.ActiveCodePane.CodeModule.Lines(StartLine, 1)
+    str = Mid(str, 1, StartColumn - 1)
+    PartBeforeCodePaneSelection = str
+End Function
