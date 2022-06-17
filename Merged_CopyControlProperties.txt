@@ -1,3 +1,7 @@
+'NOTE!
+'Needs reference to vba extensibility
+'https://bettersolutions.com/vba/visual-basic-editor/extensibility.htm
+
 ''''''''''''''''''''''''''''''
 'Contains the following procedures #8
 ''''''''''''''''''''''''''''''
