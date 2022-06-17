@@ -11,7 +11,8 @@
 'PartAfterCodePaneSelection
 'PartBeforeCodePaneSelection
 '
-
+'NOTE! Use monospace Font like Consolas in vbeditor 
+'
 Sub AlignVbeCommentsToColumn(AlignAtColumn As Long)
 '#INCLUDE Inject
 '#INCLUDE CodePaneSelectionStartLine
