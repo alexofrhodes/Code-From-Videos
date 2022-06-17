@@ -1,0 +1,130 @@
+''''''''''''''''''''''''''''''
+'Contains the following procedures #7
+''''''''''''''''''''''''''''''
+'ActiveModule
+'ActiveProcedure
+'InStrExact
+'ModuleOfProcedure
+'ProcedureEndLine
+'ProcedureFirstLine
+'SetToNothing
+'
+
+
+Rem todo
+Public Sub SetToNothing(Optional PROCEDURENAME As String, Optional TargetWorkbook As Workbook)
+'#INCLUDE ProcedureFirstLine
+'#INCLUDE ProcedureEndLine
+'#INCLUDE ActiveModule
+'#INCLUDE ActiveProcedure
+'#INCLUDE ModuleOfProcedure
+    If PROCEDURENAME = "" And TargetWorkbook Is Nothing Then Exit Sub
+    If PROCEDURENAME = "" Then PROCEDURENAME = ActiveProcedure
+    Dim Module As VBComponent
+    If TargetWorkbook Is Nothing Then
+        Set Module = ActiveModule
+    Else
+        Set Module = ModuleOfProcedure(TargetWorkbook, PROCEDURENAME)
+    End If
+    Dim FirstLine As Long, LastLine As Long, LineNumber As Long
+    Dim strLine As String, Append As String, Terminate As String
+    FirstLine = ProcedureFirstLine(Module, PROCEDURENAME)
+    LastLine = ProcedureEndLine(Module, PROCEDURENAME)
+    For LineNumber = FirstLine To LastLine
+        strLine = Trim(Module.CodeModule.Lines(LineNumber, 1))
+        If strLine Like "Set * = *" Or strLine Like "Dim*As New*" Then
+            Terminate = Split(strLine, " ")(1)
+            Append = Append & vbNewLine & "Set " & Terminate & " = Nothing"
+        End If
+    Next
+    If Append <> "" Then Module.CodeModule.InsertLines LastLine, Append
+End Sub
+
+Function ProcedureFirstLine(Module As VBComponent, procname As String) As Long
+'#INCLUDE InStrExact
+    Dim N As Long
+    Dim s As String
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    For N = Module.CodeModule.ProcBodyLine(procname, ProcKind) + IIf(N = 0, 1, 0) To Module.CodeModule.CountOfLines
+        s = Trim(Module.CodeModule.Lines(N, 1))
+        If s = vbNullString Then
+            Exit For
+        ElseIf Left(s, 1) = "'" Then
+        ElseIf Left(s, 3) = "Rem" Then
+        ElseIf Right(Trim(Module.CodeModule.Lines(N - 1, 1)), 1) = "_" Then
+        ElseIf Right(s, 1) = "_" Then
+        ElseIf InStrExact(1, s, "Sub ") Then
+        ElseIf InStrExact(1, s, "Function ") Then
+        Else
+            Exit For
+        End If
+    Next N
+    ProcedureFirstLine = N
+End Function
+
+Public Function ProcedureEndLine(Module As VBComponent, procname As String) As Long
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    Dim StartAt As Long
+    Dim EndAt As Long
+    Dim CountOf As Long
+    StartAt = Module.CodeModule.ProcStartLine(procname, ProcKind)
+    EndAt = Module.CodeModule.ProcStartLine(procname, ProcKind) + Module.CodeModule.ProcCountLines(procname, ProcKind) - 1
+    CountOf = Module.CodeModule.ProcCountLines(procname, ProcKind)
+    ProcedureEndLine = EndAt
+End Function
+
+Function ActiveModule() As VBComponent
+    Set ActiveModule = Application.VBE.SelectedVBComponent
+End Function
+
+Public Function ActiveProcedure() As String
+    Application.VBE.ActiveCodePane.GetSelection L1&, C1&, L2&, C2&
+    ActiveProcedure = Application.VBE.ActiveCodePane _
+                     .CodeModule.ProcOfLine(L1&, vbext_pk_Proc)
+End Function
+
+Function ModuleOfProcedure(wb As Workbook, PROCEDURENAME As Variant) As VBComponent
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    Dim lineNum As Long, NumProc As Long
+    Dim procname As String
+    Dim vbComp As VBComponent
+    For Each vbComp In wb.VBProject.VBComponents
+        With vbComp.CodeModule
+            lineNum = .CountOfDeclarationLines + 1
+            Do Until lineNum >= .CountOfLines
+                procname = .ProcOfLine(lineNum, ProcKind)
+                lineNum = .ProcStartLine(procname, ProcKind) + .ProcCountLines(procname, ProcKind) + 1
+                If UCase(procname) = UCase(PROCEDURENAME) Then
+                    Set ModuleOfProcedure = vbComp
+                    Exit Function
+                End If
+            Loop
+        End With
+    Next vbComp
+End Function
+
+Function InStrExact(Start As Long, SourceText As String, WordToFind As String, _
+                    Optional CaseSensitive As Boolean = False, _
+                    Optional AllowAccentedCharacters As Boolean = False) As Long
+    Dim x As Long, Str1 As String, Str2 As String, Pattern As String
+    Const UpperAccentsOnly As String = "ÇÉÑ"
+    Const UpperAndLowerAccents As String = "ÇÉÑçéñ"
+    If CaseSensitive Then
+        Str1 = SourceText
+        Str2 = WordToFind
+        Pattern = "[!A-Za-z0-9]"
+        If AllowAccentedCharacters Then Pattern = Replace(Pattern, "!", "!" & UpperAndLowerAccents)
+    Else
+        Str1 = UCase(SourceText)
+        Str2 = UCase(WordToFind)
+        Pattern = "[!A-Z0-9]"
+        If AllowAccentedCharacters Then Pattern = Replace(Pattern, "!", "!" & UpperAccentsOnly)
+    End If
+    For x = Start To Len(Str1) - Len(Str2) + 1
+        If Mid(" " & Str1 & " ", x, Len(Str2) + 2) Like Pattern & Str2 & Pattern _
+                                                   And Not Mid(Str1, x) Like Str2 & "'[" & Mid(Pattern, 3) & "*" Then
+            InStrExact = x
+            Exit Function
+        End If
+    Next
+End Function
