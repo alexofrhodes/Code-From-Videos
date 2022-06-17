@@ -1,0 +1,155 @@
+''''''''''''''''''''''''''''''
+'Contains the following procedures #6
+''''''''''''''''''''''''''''''
+'OverwriteTxt
+'PretendListOfContainedProceduresInTXT
+'ProceduresOfTXT
+'SortArray
+'TxtRead
+'joinArrays
+'
+
+
+Sub PretendListOfContainedProceduresInTXT(FileName As String)
+'#INCLUDE ProceduresOfTXT
+'#INCLUDE OverwriteTxt
+'#INCLUDE TxtRead
+    Dim v As Variant: v = ProceduresOfTXT(FileName, True)
+    If TypeName(v) = "Empty" Then Exit Sub
+    Dim s As String: s = TxtRead(FileName)
+    Dim line As String: line = String(30, "'")
+    OverwriteTxt FileName, _
+    line & vbNewLine & _
+    "'Contains the following " & "#" & UBound(v) & " procedures " & vbNewLine & line & vbNewLine & "'" & _
+    Join(v, vbNewLine & "'") & vbNewLine & vbNewLine & s
+
+End Sub
+Function ProceduresOfTXT(FilePath As Variant, Optional NameOnly As Boolean) As Variant
+'#INCLUDE joinArrays
+'#INCLUDE SortArray
+'#INCLUDE TxtRead
+    Dim var
+    var = Split(TxtRead(CStr(FilePath)), Chr(10))
+    Dim out
+    out = joinArrays(Filter(var, "Sub "), Filter(var, "Function "))
+    If TypeName(out) = "Empty" Then Exit Function
+    out = Filter(out, "(", True)
+    out = Filter(out, "Declare", False)
+    out = Filter(out, Chr(34) & "Sub ", False)
+    out = Filter(out, Chr(34) & "Function ", False)
+    If NameOnly = True Then
+        Dim i As Long
+        For i = LBound(out) To UBound(out)
+                out(i) = Left(out(i), InStr(1, out(i), "(") - 1)
+                out(i) = Replace(out(i), "Private ", "")
+                out(i) = Replace(out(i), "Public ", "")
+                out(i) = Replace(out(i), "Sub ", "")
+                out(i) = Replace(out(i), "Function ", "")
+        Next
+    End If
+    out = SortArray(out)
+    ProceduresOfTXT = out
+    Rem ProceduresOfTXT = Join(out, Chr(10))
+End Function
+
+Function OverwriteTxt(sFile As String, sText As String)
+    On Error GoTo Err_Handler
+    Dim FileNumber As Integer
+    FileNumber = FreeFile
+    Open sFile For Output As #FileNumber
+    Print #FileNumber, sText
+    Close #FileNumber
+Exit_Err_Handler:
+    Exit Function
+Err_Handler:
+    MsgBox "The following error has occurred" & vbCrLf & vbCrLf & _
+           "Error Number: " & Err.Number & vbCrLf & _
+           "Error Source: OverwriteTxt" & vbCrLf & _
+           "Error Description: " & Err.Description, vbCritical, "An Error has Occurred!"
+    GoTo Exit_Err_Handler
+End Function
+Function TxtRead(sPath As Variant) As String
+    Dim sTXT As String
+    If Dir(sPath) = "" Then
+        MsgBox "File was not found."
+        Exit Function
+    End If
+    Open sPath For Input As #1
+    Do Until EOF(1)
+        Line Input #1, sTXT
+        TxtRead = TxtRead & sTXT & vbLf
+    Loop
+    Close
+    If Len(TxtRead) = 0 Then
+        TxtRead = ""
+    Else
+        TxtRead = Left(TxtRead, Len(TxtRead) - 1)
+    End If
+End Function
+
+Function joinArrays(arr1 As Variant, arr2 As Variant) As Variant
+     Dim arrToReturn() As Variant, myCollection As New Collection
+     For Each X In arr1: myCollection.Add X: Next
+     For Each Y In arr2: myCollection.Add Y: Next
+     If myCollection.Count = 0 Then Exit Function
+     ReDim arrToReturn(1 To myCollection.Count)
+     For i = 1 To myCollection.Count: arrToReturn(i) = myCollection.Item(i): Next
+     joinArrays = arrToReturn
+End Function
+
+Public Function SortArray( _
+    ByVal sortableArray As Variant, _
+    Optional ByVal descendingFlag As Boolean) _
+As Variant
+
+    '@Description: This function is an implementation of Bubble Sort, allowing the user to sort an array, optionally allowing the user to specify the array to be sorted in descending order
+    '@Author: Anthony Mancini
+    '@Version: 1.0.0
+    '@License: MIT
+    '@Param: sortableArray is the array that will be sorted
+    '@Param: descendingFlag changes the sort to descending
+    '@Returns: Returns the a sorted array
+    '@Example: =Sort({1,3,2}) -> {1,2,3}
+    '@Example: =Sort({1,3,2}, True) -> {3,2,1}
+
+    Dim i As Integer
+    Dim swapOccuredBool As Boolean
+    Dim arrayLength As Integer
+    arrayLength = UBound(sortableArray) - LBound(sortableArray) + 1
+    
+    Dim sortedArray() As Variant
+    ReDim sortedArray(arrayLength)
+    Dim dif As Long
+    dif = IIf(LBound(sortableArray) = 1, 1, 0)
+    For i = 0 To arrayLength - 1
+        sortedArray(i) = sortableArray(i + dif)
+    Next
+    
+    Dim temporaryValue As Variant
+    
+    Do
+        swapOccuredBool = False
+        For i = 0 To arrayLength - 1
+            If (sortedArray(i)) < sortedArray(i + 1) Then
+                temporaryValue = sortedArray(i)
+                sortedArray(i) = sortedArray(i + 1)
+                sortedArray(i + 1) = temporaryValue
+                swapOccuredBool = True
+            End If
+        Next
+    Loop While swapOccuredBool
+    
+    If descendingFlag = True Then
+        SortArray = sortedArray
+    Else
+        Dim ascendingArray() As Variant
+        ReDim ascendingArray(arrayLength)
+        
+        For i = 0 To arrayLength - 1
+            ascendingArray(i) = sortedArray(arrayLength - i - 1)
+        Next
+        
+        SortArray = ascendingArray
+    End If
+    
+End Function
