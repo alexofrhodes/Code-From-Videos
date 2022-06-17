@@ -1,0 +1,381 @@
+''''''''''''''''''''''''''''''
+'Contains the following procedures #16
+''''''''''''''''''''''''''''''
+'ActiveModule
+'ActiveProcedure
+'ArrayDimensions
+'CLIP
+'CalculateByteCharacters
+'CodepaneSelection
+'DPH
+'DebugPrintHairetu
+'GetArguments
+'GetProcedureDeclaration
+'ModReplaceMulti
+'ModuleOfProcedure
+'ShortenToByteCharacters
+'SingleSpace
+'TextDecomposition
+'dp
+'
+
+
+Public Function GetArguments( _
+                            Optional PROCEDURE As String, _
+                            Optional TargetWorkbook As Workbook) _
+                                                                As String
+'#INCLUDE GetProcedureDeclaration
+'#INCLUDE CodepaneSelection
+'#INCLUDE ModReplaceMulti
+'#INCLUDE ActiveModule
+'#INCLUDE ActiveProcedure
+'#INCLUDE ModuleOfProcedure
+'#INCLUDE CLIP
+'#INCLUDE dp
+    
+    'If Procedure = "" Then Procedure = ActiveProcedure
+    Dim s As String
+    s = CodepaneSelection
+    If PROCEDURE = "" Then
+        If Len(s) > 0 Then
+            PROCEDURE = s
+        Else
+            PROCEDURE = ActiveProcedure
+        End If
+    End If
+    
+    Dim Module As VBComponent
+    If TargetWorkbook Is Nothing Then
+        Set Module = ActiveModule
+    Else
+        Set Module = ModuleOfProcedure(TargetWorkbook, PROCEDURE)
+    End If
+        
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    Dim str As Variant, ELEMENT As Long, line As String
+    Dim firstPart As String, secondPart As String, Output As String
+    str = GetProcedureDeclaration(Module, PROCEDURE, ProcKind)
+    If IsEmpty(str) Then GetArgs = "": Exit Function
+    Output = PROCEDURE & "( _"
+    Dim Indentation As String: Indentation = String(Len(Output), " ")
+    str = Right(str, Len(str) - InStr(1, str, "("))
+    str = Left(str, InStrRev(str, ")") - 1)
+    
+    If InStr(1, str, Chr(34) & "," & Chr(34)) > 0 Then str = Replace(str, Chr(34) & "," & Chr(34), Chr(34) & "###" & Chr(34))
+    
+    str = Split(str, ",")
+    
+    For i = LBound(str) To UBound(str)
+        str(i) = Replace(str(i), Chr(34) & "###" & Chr(34), Chr(34) & "," & Chr(34))
+    Next
+    
+    If UBound(str) = -1 Then Exit Function
+    For ELEMENT = LBound(str) To UBound(str)
+            line = ModReplaceMulti(vbTextCompare, Trim(str(ELEMENT)), "", "Optional ", "As ", "ByVal ", "ByRef", "ParamArray ", "_")
+            firstPart = Split(line, " ")(0): secondPart = Split(line, " ")(1) 'secondPart = iif(ubound(str)>0,Split(line, " ")(1),"Variant"
+            Output = Output & vbNewLine & Indentation & firstPart & ":= " & "as" & secondPart & IIf(ELEMENT <> UBound(str), ", _", ")")
+    Next
+    CLIP Output
+    dp Output
+    GetArguments = Output
+End Function
+
+Public Function GetProcedureDeclaration(Module As VBComponent, _
+                                        procname As String, _
+                                        Optional LineSplitBehavior As LineSplits = REMOVE_LINE_SPLITS)
+'#INCLUDE SingleSpace
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    Dim lineNum As Long
+    Dim s As String
+    Dim Declaration As String
+    On Error Resume Next
+    lineNum = Module.CodeModule.ProcBodyLine(procname, ProcKind)
+    If err.Number <> 0 Then
+        Exit Function
+    End If
+    s = Module.CodeModule.Lines(lineNum, 1)
+    Do While Right(s, 1) = "_"
+        Select Case True
+            Case LineSplitBehavior = CONVERT_LINE_SPLITS
+                s = Left(s, Len(s) - 1) & vbNewLine
+            Case LineSplitBehavior = KEEP_LINE_SPLITS
+                s = s & vbNewLine
+            Case LineSplitBehavior = REMOVE_LINE_SPLITS
+                s = Left(s, Len(s) - 1) & " "
+        End Select
+        Declaration = Declaration & s
+        lineNum = lineNum + 1
+        s = Module.CodeModule.Lines(lineNum, 1)
+    Loop
+    Declaration = SingleSpace(Declaration & s)
+    GetProcedureDeclaration = Declaration
+End Function
+
+Public Function CodepaneSelection() As String
+    Dim StartLine As Long, StartColumn As Long, EndLine As Long, EndColumn As Long
+    Application.VBE.ActiveCodePane.GetSelection StartLine, StartColumn, EndLine, EndColumn
+    If EndLine - StartLine = 0 Then
+        CodepaneSelection = Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(StartLine, 1), StartColumn, EndColumn - StartColumn)
+        Exit Function
+    End If
+    Dim str As String
+    Dim i As Long
+    For i = StartLine To EndLine
+        If str = "" Then
+            str = Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(i, 1), StartColumn)
+        ElseIf i < EndLine Then
+            str = str & vbNewLine & Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(i, 1), 1)
+        Else
+            str = str & vbNewLine & Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(i, 1), 1, EndColumn - 1)
+        End If
+    Next
+    CodepaneSelection = str
+End Function
+
+Public Function ModReplaceMulti( _
+       ByVal compare As VbCompareMethod, _
+       ByVal str As String, _
+       toStr As String, _
+       ParamArray replacements() As Variant) _
+        As String
+    Rem ModReplaceMulti vbTextCompare, "a b c d", "X",array("a","c")
+    Rem returns: "X b X d"
+    
+    Dim ELEMENT As Variant
+    For Each ELEMENT In replacements
+        str = Replace(str, ELEMENT, toStr, , , compare)
+    Next
+    ModReplaceMulti = str
+End Function
+
+Function ActiveModule() As VBComponent
+    Set ActiveModule = Application.VBE.SelectedVBComponent
+End Function
+
+Public Function ActiveProcedure() As String
+    Application.VBE.ActiveCodePane.GetSelection L1&, C1&, L2&, C2&
+    ActiveProcedure = Application.VBE.ActiveCodePane _
+                     .CodeModule.ProcOfLine(L1&, vbext_pk_Proc)
+End Function
+
+Function ModuleOfProcedure(wb As Workbook, PROCEDURENAME As Variant) As VBComponent
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    Dim lineNum As Long, NumProc As Long
+    Dim procname As String
+    Dim vbComp As VBComponent
+    For Each vbComp In wb.VBProject.VBComponents
+        With vbComp.CodeModule
+            lineNum = .CountOfDeclarationLines + 1
+            Do Until lineNum >= .CountOfLines
+                procname = .ProcOfLine(lineNum, ProcKind)
+                lineNum = .ProcStartLine(procname, ProcKind) + .ProcCountLines(procname, ProcKind) + 1
+                If UCase(procname) = UCase(PROCEDURENAME) Then
+                    Set ModuleOfProcedure = vbComp
+                    Exit Function
+                End If
+            Loop
+        End With
+    Next vbComp
+End Function
+
+Public Function CLIP(Optional StoreText As String) As String
+    Dim x As Variant
+    x = StoreText
+    With CreateObject("htmlfile")
+        With .parentWindow.clipboardData
+            Select Case True
+                Case Len(StoreText)
+                    .SetData "text", x
+                Case Else
+                    CLIP = .GetData("text")
+            End Select
+        End With
+    End With
+End Function
+
+Sub dp(var As Variant)
+'#INCLUDE DPH
+'#INCLUDE ArrayDimensions
+    Dim ELEMENT As Variant
+    Select Case TypeName(var)
+        Case Is = "String", "Long", "Integer", "Boolean"
+            Debug.Print var
+        Case Is = "Variant()", "String()", "Long()", "Integer()"
+            If ArrayDimensions(var) = 1 Then
+                Dim i As Long
+                For i = LBound(var) To UBound(var)
+                    Debug.Print var(i)
+                Next i
+            ElseIf ArrayDimensions(var) > 1 Then
+                DPH var
+            End If
+        Case Is = "Collection"
+            For Each ELEMENT In var
+                dp ELEMENT
+            Next ELEMENT
+        Case Is = "Range"
+            dp var.Value
+        Case Is = "Date"
+            Debug.Print var
+        Case Else
+    End Select
+End Sub
+
+Public Function SingleSpace(ByVal Text As String) As String
+    Dim pos As String
+    pos = InStr(1, Text, Space(2), vbBinaryCompare)
+    Do Until pos = 0
+        Text = Replace(Text, Space(2), Space(1))
+        pos = InStr(1, Text, Space(2), vbBinaryCompare)
+    Loop
+    SingleSpace = Text
+End Function
+
+Sub DPH(ByVal Hairetu, Optional HyoujiMaxNagasa%, Optional HairetuName$)
+'#INCLUDE DebugPrintHairetu
+    Call DebugPrintHairetu(Hairetu, HyoujiMaxNagasa, HairetuName)
+End Sub
+
+Function ArrayDimensions(ByVal vArray As Variant) As Long
+    Dim dimnum As Long
+    On Error GoTo FinalDimension
+    For dimnum = 1 To 60000
+        ErrorCheck = LBound(vArray, dimnum)
+    Next
+FinalDimension:
+    ArrayDimensions = dimnum - 1
+End Function
+
+Rem ------------------------
+
+
+Sub DebugPrintHairetu(ByVal Hairetu, Optional HyoujiMaxNagasa%, Optional HairetuName$)
+'#INCLUDE ShortenToByteCharacters
+    Dim i&, j&, k&, m&, N&
+    Dim TateMin&, TateMax&, YokoMin&, YokoMax&
+    Dim WithTableHairetu
+    Dim NagasaList, MaxNagasaList
+    Dim NagasaOnajiList
+    Dim OutputList
+    Const SikiriMoji$ = "|"
+    Dim Jigen2%
+    On Error Resume Next
+    Jigen2 = UBound(Hairetu, 2)
+    On Error GoTo 0
+    If Jigen2 = 0 Then
+        Hairetu = Application.Transpose(Hairetu)
+    End If
+    TateMin = LBound(Hairetu, 1)
+    TateMax = UBound(Hairetu, 1)
+    YokoMin = LBound(Hairetu, 2)
+    YokoMax = UBound(Hairetu, 2)
+    ReDim WithTableHairetu(1 To TateMax - TateMin + 1 + 1, 1 To YokoMax - YokoMin + 1 + 1)
+    For i = 1 To TateMax - TateMin + 1
+        WithTableHairetu(i + 1, 1) = TateMin + i - 1
+            For j = 1 To YokoMax - YokoMin + 1
+                WithTableHairetu(1, j + 1) = YokoMin + j - 1
+                    WithTableHairetu(i + 1, j + 1) = Hairetu(i - 1 + TateMin, j - 1 + YokoMin)
+                    Next j
+                Next i
+                N = UBound(WithTableHairetu, 1)
+                m = UBound(WithTableHairetu, 2)
+                ReDim NagasaList(1 To N, 1 To m)
+                ReDim MaxNagasaList(1 To m)
+                Dim TmpStr$
+                For j = 1 To m
+                    For i = 1 To N
+                        If j > 1 And HyoujiMaxNagasa <> 0 Then
+                            TmpStr = WithTableHairetu(i, j)
+                            WithTableHairetu(i, j) = ShortenToByteCharacters(TmpStr, HyoujiMaxNagasa)
+                            End If
+                            NagasaList(i, j) = LenB(StrConv(WithTableHairetu(i, j), vbFromUnicode))
+                            MaxNagasaList(j) = WorksheetFunction.Max(MaxNagasaList(j), NagasaList(i, j))
+                        Next i
+                    Next j
+                    ReDim NagasaOnajiList(1 To N, 1 To m)
+                    Dim TmpMaxNagasa&
+                    For j = 1 To m
+                        TmpMaxNagasa = MaxNagasaList(j)
+                        For i = 1 To N
+                            NagasaOnajiList(i, j) = WithTableHairetu(i, j) & WorksheetFunction.Rept(" ", TmpMaxNagasa - NagasaList(i, j))
+                        Next i
+                    Next j
+                    ReDim OutputList(1 To N)
+                    For i = 1 To N
+                        For j = 1 To m
+                            If j = 1 Then
+                                OutputList(i) = NagasaOnajiList(i, j)
+                            Else
+                                OutputList(i) = OutputList(i) & SikiriMoji & NagasaOnajiList(i, j)
+                            End If
+                        Next j
+                    Next i
+                    Debug.Print HairetuName
+                    For i = 1 To N
+                        Debug.Print OutputList(i)
+                    Next i
+                End Sub
+
+Function ShortenToByteCharacters(Mojiretu$, ByteNum%)
+'#INCLUDE CalculateByteCharacters
+'#INCLUDE TextDecomposition
+    Dim OriginByte%
+    Dim Output
+    OriginByte = LenB(StrConv(Mojiretu, vbFromUnicode))
+    If OriginByte <= ByteNum Then
+        Output = Mojiretu
+    Else
+        Dim RuikeiByteList, BunkaiMojiretu
+        RuikeiByteList = CalculateByteCharacters(Mojiretu)
+        BunkaiMojiretu = TextDecomposition(Mojiretu)
+        Dim AddMoji$
+        AddMoji = "."
+        Dim i&, N&
+        N = Len(Mojiretu)
+        For i = 1 To N
+            If RuikeiByteList(i) < ByteNum Then
+                Output = Output & BunkaiMojiretu(i)
+            ElseIf RuikeiByteList(i) = ByteNum Then
+                If LenB(StrConv(BunkaiMojiretu(i), vbFromUnicode)) = 1 Then
+                    Output = Output & AddMoji
+                Else
+                    Output = Output & AddMoji & AddMoji
+                End If
+                Exit For
+            ElseIf RuikeiByteList(i) > ByteNum Then
+                Output = Output & AddMoji
+                Exit For
+            End If
+        Next i
+    End If
+    ShortenToByteCharacters = Output
+End Function
+
+Function CalculateByteCharacters(Mojiretu$)
+    Dim MojiKosu%
+    MojiKosu = Len(Mojiretu)
+    Dim Output
+    ReDim Output(1 To MojiKosu)
+    Dim i&
+    Dim TmpMoji$
+    For i = 1 To MojiKosu
+        TmpMoji = Mid(Mojiretu, i, 1)
+        If i = 1 Then
+            Output(i) = LenB(StrConv(TmpMoji, vbFromUnicode))
+        Else
+            Output(i) = LenB(StrConv(TmpMoji, vbFromUnicode)) + Output(i - 1)
+        End If
+    Next i
+    CalculateByteCharacters = Output
+End Function
+
+Function TextDecomposition(Mojiretu$)
+    Dim i&, N&
+    Dim Output
+    N = Len(Mojiretu)
+    ReDim Output(1 To N)
+    For i = 1 To N
+        Output(i) = Mid(Mojiretu, i, 1)
+    Next i
+    TextDecomposition = Output
+End Function
