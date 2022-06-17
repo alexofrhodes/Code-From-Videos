@@ -1,0 +1,249 @@
+''''''''''''''''''''''''''''''
+'Contains the following procedures #6
+''''''''''''''''''''''''''''''
+'FilesAndOrFoldersInFolderOrZip
+'FolderExists
+'FoldersCreate
+'Recycle
+'RecycleSafe
+'UnzipToOwnFolder
+'
+
+Public Sub UnzipToOwnFolder(ZippedFile As String, DeleteExistingFiles As Boolean, DeleteZip As Boolean)
+ Rem for each cell in selection.cells: UnzipToOwnFolder cell.text,False,false :next
+'#INCLUDE FoldersCreate
+'#INCLUDE FilesAndOrFoldersInFolderOrZip
+'#INCLUDE FolderExists
+'#INCLUDE Recycle
+'#INCLUDE RecycleSafe
+ 
+
+   Dim FileCollection As New Collection
+    FilesAndOrFoldersInFolderOrZip ZippedFile, False, True, False, FileCollection
+    Dim FolderCollection As New Collection
+    FilesAndOrFoldersInFolderOrZip ZippedFile, True, False, False, FolderCollection
+   
+   Dim shell_app           As Object:     Set shell_app = CreateObject("Shell.Application")
+Rem   Dim FilesInZip          As Long:        FilesInZip = shell_app.Namespace(CVar(ZippedFile)).items.Count
+    Dim LastSlash            As Long:       LastSlash = InStrRev(ZippedFile, "\")
+    Dim Dot                      As Long:      Dot = InStrRev(ZippedFile, ".")
+    Dim ParentFolder       As String:     ParentFolder = Left(ZippedFile, LastSlash)
+    Dim UnzipToFolder   As String
+    If FolderCollection.Count = 1 And FileCollection.Count = 0 Then
+        UnzipToFolder = ParentFolder
+    ElseIf FolderCollection.Count > 1 Or FileCollection.Count > 0 Then
+        UnzipToFolder = Left(ZippedFile, Dot - 1) & "\"
+        If DeleteExistingFiles Then
+            If FolderExists(UnzipToFolder) Then RecycleSafe UnzipToFolder
+        End If
+        FoldersCreate UnzipToFolder
+    End If
+    shell_app.Namespace(CVar(UnzipToFolder)).copyhere shell_app.Namespace(CVar(ZippedFile)).items
+    If DeleteZip Then RecycleSafe ZippedFile
+    Set shell_app = Nothing
+End Sub
+
+Sub FoldersCreate(folderPath As String)
+    Dim individualFolders() As String
+    Dim tempFolderPath As String
+    Dim arrayElement As Variant
+    individualFolders = Split(folderPath, "\")
+    For Each arrayElement In individualFolders
+        tempFolderPath = tempFolderPath & arrayElement & "\"
+        If FolderExists(tempFolderPath) = False Then
+            MkDir tempFolderPath
+        End If
+    Next arrayElement
+End Sub
+Function FilesAndOrFoldersInFolderOrZip(ByVal FolderOrZipFilePath As String, LogFolders As Boolean, LogFiles As Boolean, ScanInSubfolders As Boolean, out As Collection, Optional Filter As String = "*")
+Dim oSh As New Shell
+    Dim oFi As Object
+    For Each oFi In oSh.Namespace(FolderOrZipFilePath).items
+        If oFi.IsFolder Then
+            If LogFolders Then
+                out.Add oFi.Path & "\"
+            End If
+            If ScanInSubfolders Then FilesAndOrFoldersInFolderOrZip oFi.Path, LogFolders, LogFiles, ScanInSubfolders, out, Filter
+        Else
+            If LogFiles Then
+                If UCase(oFi.Name) Like UCase(Filter) Then
+                    out.Add oFi.Path
+                End If
+            End If
+        End If
+    Next
+    Set FilesAndOrFoldersInFolderOrZip = out
+    Set oSh = Nothing
+End Function
+Function FolderExists(ByVal strPath As String) As Boolean
+    On Error Resume Next
+    FolderExists = ((GetAttr(strPath) And vbDirectory) = vbDirectory)
+End Function
+
+Public Function Recycle(FileSpec As String, Optional ErrText As String) As Boolean
+    Dim SHFileOp As SHFILEOPSTRUCT
+    Dim Res As Long
+    Dim sFileSpec As String
+    ErrText = vbNullString
+    sFileSpec = FileSpec
+    If InStr(1, FileSpec, ":", vbBinaryCompare) = 0 Then
+        ErrText = "'" & FileSpec & "' is not a fully qualified name on the local machine"
+        Recycle = False
+        Exit Function
+    End If
+    If Dir(FileSpec, vbDirectory) = vbNullString Then
+        ErrText = "'" & FileSpec & "' does not exist"
+        Recycle = False
+        Exit Function
+    End If
+    If Right(sFileSpec, 1) = "\" Then
+        sFileSpec = Left(sFileSpec, Len(sFileSpec) - 1)
+    End If
+    With SHFileOp
+        .wFunc = FO_DELETE
+        .pFrom = sFileSpec
+        .fFlags = FOF_ALLOWUNDO
+        .fFlags = FOF_ALLOWUNDO + FOF_NOCONFIRMATION
+    End With
+    Res = SHFileOperation(SHFileOp)
+    If Res = 0 Then
+        Recycle = True
+    Else
+        Recycle = False
+    End If
+End Function
+
+Public Function RecycleSafe(FileSpec As String, Optional ByRef ErrText As String) As Boolean
+    Dim ThisWorkbookFullName As String
+    Dim ThisWorkbookPath As String
+    Dim WindowsFolder As String
+    Dim SystemFolder As String
+    Dim ProgramFiles As String
+    Dim MyDocuments As String
+    Dim Desktop As String
+    Dim ApplicationPath As String
+    Dim Pos As Long
+    Dim ShellObj As Object
+    Dim sFileSpec As String
+    Dim SHFileOp As SHFILEOPSTRUCT
+    Dim Res As Long
+    Dim FileNum As Integer
+    sFileSpec = FileSpec
+    If InStr(1, FileSpec, ":", vbBinaryCompare) = 0 Then
+        RecycleSafe = False
+        ErrText = "'" & FileSpec & "' is not a fully qualified name on the local machine"
+        Exit Function
+    End If
+    If Dir(FileSpec, vbDirectory) = vbNullString Then
+        RecycleSafe = False
+        ErrText = "'" & FileSpec & "' does not exist"
+        Exit Function
+    End If
+    If Right(sFileSpec, 1) = "\" Then
+        sFileSpec = Left(sFileSpec, Len(sFileSpec) - 1)
+    End If
+    ThisWorkbookFullName = ThisWorkbook.FullName
+    ThisWorkbookPath = ThisWorkbook.Path
+    SystemFolder = String$(MAX_PATH, vbNullChar)
+    GetSystemDirectory SystemFolder, Len(SystemFolder)
+    SystemFolder = Left(SystemFolder, InStr(1, SystemFolder, vbNullChar, vbBinaryCompare) - 1)
+    Pos = InStrRev(SystemFolder, "\")
+    If Pos > 0 Then
+        WindowsFolder = Left(SystemFolder, Pos - 1)
+    End If
+    Pos = InStr(1, Application.Path, "\", vbBinaryCompare)
+    Pos = InStr(Pos + 1, Application.Path, "\", vbBinaryCompare)
+    ProgramFiles = Left(Application.Path, Pos - 1)
+    ApplicationPath = Application.Path
+    On Error Resume Next
+    Err.Clear
+    Set ShellObj = CreateObject("WScript.Shell")
+    If ShellObj Is Nothing Then
+        RecycleSafe = False
+        ErrText = "Error Creating WScript.Shell. " & CStr(Err.Number) & ": " & Err.Description
+        Exit Function
+    End If
+    MyDocuments = ShellObj.SpecialFolders("MyDocuments")
+    Desktop = ShellObj.SpecialFolders("Desktop")
+    Set ShellObj = Nothing
+    If (sFileSpec Like "?*:") Or (sFileSpec Like "?*:\") Then
+        RecycleSafe = False
+        ErrText = "File Specification is a root directory."
+        Exit Function
+    End If
+    If (InStr(1, sFileSpec, "*", vbBinaryCompare) > 0) Or (InStr(1, sFileSpec, "?", vbBinaryCompare) > 0) Then
+        RecycleSafe = False
+        ErrText = "File specification contains wildcard characters"
+        Exit Function
+    End If
+    If StrComp(sFileSpec, ThisWorkbookFullName, vbTextCompare) = 0 Then
+        RecycleSafe = False
+        ErrText = "File specification is the same as this workbook."
+        Exit Function
+    End If
+    If StrComp(sFileSpec, ThisWorkbookPath, vbTextCompare) = 0 Then
+        RecycleSafe = False
+        ErrText = "File specification is this workbook's path"
+        Exit Function
+    End If
+    If StrComp(ThisWorkbook.FullName, sFileSpec, vbTextCompare) = 0 Then
+        RecycleSafe = False
+        ErrText = "File specification is this workbook."
+        Exit Function
+    End If
+    If StrComp(sFileSpec, SystemFolder, vbTextCompare) = 0 Then
+        RecycleSafe = False
+        ErrText = "File specification is the System Folder"
+        Exit Function
+    End If
+    If StrComp(sFileSpec, WindowsFolder, vbTextCompare) = 0 Then
+        RecycleSafe = False
+        ErrText = "File specification is the Windows folder"
+        Exit Function
+    End If
+    If StrComp(sFileSpec, Application.Path, vbTextCompare) = 0 Then
+        RecycleSafe = False
+        ErrText = "File specification is Application Path"
+        Exit Function
+    End If
+    If StrComp(sFileSpec, MyDocuments, vbTextCompare) = 0 Then
+        RecycleSafe = False
+        ErrText = "File specification is MyDocuments"
+        Exit Function
+    End If
+    If StrComp(sFileSpec, Desktop, vbTextCompare) = 0 Then
+        RecycleSafe = False
+        ErrText = "File specification is Desktop"
+        Exit Function
+    End If
+    If (GetAttr(sFileSpec) And vbSystem) <> 0 Then
+        RecycleSafe = False
+        ErrText = "File specification is a System entity"
+        Exit Function
+    End If
+    If PathIsDirectory(sFileSpec) = 0 Then
+        FileNum = FreeFile()
+        On Error Resume Next
+        Err.Clear
+        Open sFileSpec For Input Lock Read As #FileNum
+        If Err.Number <> 0 Then
+            Close #FileNum
+            RecycleSafe = False
+            ErrText = "File in use: " & CStr(Err.Number) & "  " & Err.Description
+            Exit Function
+        End If
+        Close #FileNum
+    End If
+    With SHFileOp
+        .wFunc = FO_DELETE
+        .pFrom = sFileSpec
+        .fFlags = FOF_ALLOWUNDO
+        .fFlags = FOF_ALLOWUNDO + FOF_NOCONFIRMATION
+    End With
+    Res = SHFileOperation(SHFileOp)
+    If Res = 0 Then
+        RecycleSafe = True
+    Else
+        RecycleSafe = False
+    End If
+End Function
