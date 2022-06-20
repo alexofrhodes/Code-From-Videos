@@ -5,10 +5,6 @@
 'SideBySide
 '
 
-
-
-
-
 Sub SideBySide(Optional Module1 As VBComponent, _
                 Optional Module2 As VBComponent)
 '#INCLUDE ActiveModule
