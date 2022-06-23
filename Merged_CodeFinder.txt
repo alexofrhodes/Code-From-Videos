@@ -1,0 +1,571 @@
+'''''''''''''
+'In Userform named uCodeFinder
+'''''''''''''
+
+'1 Treeview control
+'1 ImageList control
+'1 Textbox
+'1 Commandbutton
+
+'code:
+
+Private Sub CommandButton1_Click()
+'#INCLUDE TreeviewClear
+'#INCLUDE FindCodeEverywhere
+'#INCLUDE TreeviewAssignProjectImages
+'#INCLUDE TreeviewExpandAllNodes
+    TreeView1.Visible = False
+        TreeviewClear TreeView1
+        FindCodeEverywhere TextBox1, TreeView1
+        'uncomment following if followed instructions at module description
+        'TreeviewAssignProjectImages TreeView1
+        TreeviewExpandAllNodes TreeView1
+    TreeView1.Visible = True
+End Sub
+
+Private Sub TreeView1_Click()
+'#INCLUDE TreeviewGotoProjectElement
+    TreeviewGotoProjectElement TreeView1
+End Sub
+
+Private Sub UserForm_Initialize()
+'#INCLUDE ImageListLoadProjectIcons
+    With TreeView1
+        .Sorted = True
+        .Appearance = ccFlat
+        .LineStyle = tvwRootLines
+        .Style = tvwTreelinesPlusMinusPictureText
+        .Font.Size = 10
+        .Indentation = 2
+    End With
+
+    'uncomment following if followed instructions at module description
+    'ImageListLoadProjectIcons ImageList1, TreeView1
+
+End Sub
+
+
+
+
+'---
+
+
+
+''''''''''''''''
+'In Module
+''''''''''''''''
+'NOTE: in procedure ImageListLoadProjectIcons change strPath to your own and include 24x24 pictures with the names as in procedure
+
+
+Public Enum tvImages
+    tvProject = 1
+    tvSheet = 2
+    tvForm = 3
+    tvModule = 4
+    tvClass = 5
+    tvMacro = 6
+    tvText = 7
+End Enum
+
+Sub FindCode()
+'#INCLUDE CodepaneSelection
+'#INCLUDE TreeviewAssignProjectImages
+'#INCLUDE FindCodeEverywhere
+'#INCLUDE MakeUserFormChildOfVBEditor
+    Load uCodeFinder
+    Dim s As String
+    s = CodepaneSelection
+    If Len(s) > 0 Then
+        MakeUserFormChildOfVBEditor uCodeFinder.Caption
+        FindCodeEverywhere CodepaneSelection, uCodeFinder.TreeView1
+        TreeviewAssignProjectImages uCodeFinder.TreeView1
+        TreeviewExpandAllNodes TreeView1
+        uCodeFinder.Show
+    End If
+End Sub
+
+Sub TreeviewExpandAllNodes(TV As TreeView)
+    With TV
+        For i = 1 To .Nodes.count
+            .Nodes(i).Expanded = True
+        Next
+    End With
+End Sub
+
+Sub TreeviewClear(TV As TreeView)
+  For i = TV.Nodes.count To 1 Step -1
+    TV.Nodes.Remove i
+  Next
+End Sub
+
+
+Sub ImageListLoadProjectIcons(imgList As ImageList, TV As TreeView)
+    strPath = "C:\Users\acer\Dropbox\SOFTWARE\EXCEL\0 Alex\treeviewicons\"
+    With imgList.ListImages
+        .Add , "Project", LoadPicture(strPath & "Project.jpg")
+        .Add , "Sheet", LoadPicture(strPath & "Sheet.jpg")
+        .Add , "Form", LoadPicture(strPath & "Form.jpg")
+        .Add , "Module", LoadPicture(strPath & "Module.jpg")
+        .Add , "Class", LoadPicture(strPath & "Class.jpg")
+        .Add , "Macro", LoadPicture(strPath & "Macro.jpg")
+        .Add , "Text", LoadPicture(strPath & "Text.jpg")
+    End With
+    
+    TV.ImageList = imgList
+End Sub
+
+Sub TreeviewAssignProjectImages(TV As TreeView)
+
+   Dim i As Long
+   Dim Module As VBComponent
+    For i = 1 To TV.Nodes.count
+    
+            Select Case TreeviewGetLevel(TV.Nodes.Item(i))
+                Case 1
+                    If InStr(1, TV.Nodes.Item(i).Text, ".") = 0 Then GoTo SKIP
+                    TV.Nodes.Item(i).Image = tvImages.tvProject
+                Case 2
+                    Set TargetWorkbook = Workbooks(TV.Nodes.Item(i).parent.Text)
+                    If InStr(1, TargetWorkbook.Name, ".") = 0 Then GoTo SKIP
+                
+                    ModuleName = TV.Nodes.Item(i).Text
+                    Set Module = Nothing
+                    On Error Resume Next
+                    Set Module = TargetWorkbook.VBProject.VBComponents(ModuleName)
+                    On Error GoTo 0
+                    If Module Is Nothing Then
+                        Set Module = ModuleOfWorksheet(TargetWorkbook.Worksheets(TV.Nodes.Item(i).Text))
+                    End If
+                    
+                    Select Case ComponentTypeToString(Module.Type)
+                    Case "Document Module"
+                        TV.Nodes.Item(i).Image = tvImages.tvSheet
+                    Case "UserForm"
+                        TV.Nodes.Item(i).Image = tvImages.tvForm
+                    Case "Code Module"
+                        TV.Nodes.Item(i).Image = tvImages.tvModule
+                    Case "Class Module"
+                        TV.Nodes.Item(i).Image = tvImages.tvClass
+    
+                    End Select
+                    
+                Case 3
+                    TV.Nodes.Item(i).Image = tvImages.tvMacro
+                Case 4
+                    TV.Nodes.Item(i).Image = tvImages.tvText
+            End Select
+SKIP:
+    Next i
+
+
+End Sub
+
+Sub TreeviewGotoProjectElement(TV As TreeView)
+
+    Dim Module As VBComponent
+    Select Case TreeviewGetLevel(TV.SelectedItem)
+    Case Is = 1
+    
+    Case Is = 2
+        With TV.SelectedItem
+            On Error Resume Next
+            Set Module = Workbooks(.parent.Text).VBProject.VBComponents(.Text)
+            On Error GoTo 0
+            If Module Is Nothing Then Set Module = Workbooks(.parent.Text).VBProject.VBComponents(Workbooks(.parent.Text).Sheets(.Text).CodeName)
+            GoToModule Module
+        End With
+    Case Is = 3
+        With TV.SelectedItem
+            On Error Resume Next
+            Set Module = Workbooks(.parent.parent.Text).VBProject.VBComponents(.parent.Text)
+            On Error GoTo 0
+            If Module Is Nothing Then Set Module = _
+            Workbooks(.parent.parent.Text).VBProject.VBComponents(Workbooks(.parent.parent.Text).Sheets(.parent.Text).CodeName)
+        
+            GoToModule Module
+            For i = 1 To Module.CodeModule.CountOfLines
+                If InStr(1, Module.CodeModule.Lines(i, 1), "Sub " & .Text) > 0 Or _
+                   InStr(1, Module.CodeModule.Lines(i, 1), "Function " & .Text) > 0 Then
+                    Module.CodeModule.CodePane.SetSelection i, 1, i, 1
+                    Exit Sub
+                End If
+            Next
+        End With
+    Case Is = 4
+        With TV.SelectedItem
+            Set Module = Workbooks(.parent.parent.parent.Text).VBProject.VBComponents(.parent.parent.Text)
+            GoToModule Module
+            DoEvents
+            For i = 1 To Module.CodeModule.CountOfLines
+                If Trim(Module.CodeModule.Lines(i, 1)) = .Text Then
+                    Module.CodeModule.CodePane.SetSelection i, 1, i, 1
+                    Exit Sub
+                End If
+            Next
+        End With
+    End Select
+End Sub
+
+Sub FindCodeEverywhere(f As String, TV As TreeView)
+
+    Dim nP As node
+    Dim nM As node
+    Dim nS As node
+    Dim nF As node
+    
+    Dim x, y, s, p As Variant
+    Dim Module As VBComponent
+    On Error Resume Next
+    For Each x In Array(Workbooks, AddIns)
+        For Each y In x
+            If Not ProtectedVBProject(Workbooks(y.Name)) Then
+                If err.Number = 0 Then
+                    If UBound(Filter(Split(GetAllText(Workbooks(y.Name)), vbNewLine), f, True, vbTextCompare)) > -1 Then
+                        Set nP = TV.Nodes.Add(, , , y.Name)
+                        For Each Module In Workbooks(y.Name).VBProject.VBComponents
+                            If UBound(Filter(Split(GetCompText(Module), vbNewLine), f, True, vbTextCompare)) > -1 Then
+                                Set nM = TV.Nodes.Add(nP, tvwChild, , getModuleName(Module))
+                                For Each p In ProceduresOfModule(Module)
+                                    If UBound(Filter(Split(GetProcText(Module, CStr(p)), vbNewLine), f, True, vbTextCompare)) > -1 Then
+                                        Set nS = TV.Nodes.Add(nM, tvwChild, , CStr(p))
+                                        s = Filter(Split(GetProcText(Module, CStr(p)), vbNewLine), f, True, vbTextCompare)
+                                        For i = 0 To UBound(s)
+                                            Set nF = TV.Nodes.Add(nS, tvwChild, , Trim(s(i)))
+                                        Next i
+                                    End If
+                                Next p
+                            End If
+                        Next Module
+                    End If
+                End If
+            End If
+            err.Clear
+        Next y
+    Next x
+End Sub
+
+Public Function CodepaneSelection() As String
+    Dim StartLine As Long, StartColumn As Long, EndLine As Long, EndColumn As Long
+    Application.VBE.ActiveCodePane.GetSelection StartLine, StartColumn, EndLine, EndColumn
+    If EndLine - StartLine = 0 Then
+        CodepaneSelection = Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(StartLine, 1), StartColumn, EndColumn - StartColumn)
+        Exit Function
+    End If
+    Dim str As String
+    Dim i As Long
+    For i = StartLine To EndLine
+        If str = "" Then
+            str = Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(i, 1), StartColumn)
+        ElseIf i < EndLine Then
+            str = str & vbNewLine & Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(i, 1), 1)
+        Else
+            str = str & vbNewLine & Mid(Application.VBE.ActiveCodePane.CodeModule.Lines(i, 1), 1, EndColumn - 1)
+        End If
+    Next
+    CodepaneSelection = str
+End Function
+
+Public Sub MakeUserFormChildOfVBEditor(GivenFormCaption As String)
+
+'#INCLUDE DisplayErrorText
+
+    #If VBA7 Then
+        Dim VBEWindowPointer As LongPtr
+        Dim UserFormWindowPointer As LongPtr
+        Dim ReturnOfSetParentAPI As LongPtr
+    #Else
+        Dim VBEWindowPointer As Long
+        Dim UserFormWindowPointer As Long
+        Dim ReturnOfSetParentAPI As Long
+    #End If
+    
+    Dim ErrorNumber As Long
+
+    VBEWindowPointer = Application.VBE.MainWindow.hwnd
+    UserFormWindowPointer = FindWindow(lpClassName:=USERFORM_WINDOW_CLASS, lpWindowName:=GivenFormCaption)
+
+    Const ERROR_NUMBER_FOR_SETPARENT_API = 0
+    ReturnOfSetParentAPI = SetParent(hWndChild:=UserFormWindowPointer, hWndNewParent:=VBEWindowPointer)
+    If ReturnOfSetParentAPI = ERROR_NUMBER_FOR_SETPARENT_API Then
+        ErrorNumber = err.LastDllError
+        DisplayErrorText "Error With SetParent", ErrorNumber
+    Else
+        Debug.Print GivenFormCaption & " is child of VBE Window."
+    End If
+    SetForegroundWindow UserFormWindowPointer
+
+End Sub
+
+Function ComponentTypeToString(ComponentType As VBIDE.vbext_ComponentType) As String
+    Select Case ComponentType
+        Case vbext_ct_ActiveXDesigner
+            ComponentTypeToString = "ActiveX Designer"
+        Case vbext_ct_ClassModule
+            ComponentTypeToString = "Class Module"
+        Case vbext_ct_Document
+            ComponentTypeToString = "Document Module"
+        Case vbext_ct_MSForm
+            ComponentTypeToString = "UserForm"
+        Case vbext_ct_StdModule
+            ComponentTypeToString = "Code Module"
+        Case Else
+            ComponentTypeToString = "Unknown Type: " & CStr(ComponentType)
+    End Select
+End Function
+
+Function ModuleOfWorksheet(TargetSheet As Worksheet) As VBComponent
+    Set ModuleOfWorksheet = TargetSheet.parent.VBProject.VBComponents(TargetSheet.CodeName)
+End Function
+
+
+Public Function TreeviewGetLevel(theNode As node) As Integer
+  TreeviewGetLevel = 1
+  Do Until theNode.Root = theNode.FirstSibling
+    TreeviewGetLevel = TreeviewGetLevel + 1
+    Set theNode = theNode.parent
+  Loop
+End Function
+
+Sub GoToModule(Module As VBComponent)
+    Application.VBE.MainWindow.Visible = True
+    'Application.VBE.MainWindow.WindowState = vbext_ws_Maximize
+    'Module.Activate
+    Module.CodeModule.CodePane.Window.SetFocus
+    Module.CodeModule.CodePane.SetSelection 1, 1, 1, 1
+End Sub
+
+Function ProceduresOfModule(Module As VBComponent) As Collection
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    Dim lineNum As Long
+    Dim coll As New Collection
+    Dim procname As String
+    With Module.CodeModule
+        lineNum = .CountOfDeclarationLines + 1
+        Do Until lineNum >= .CountOfLines
+            procname = .ProcOfLine(lineNum, ProcKind)
+            coll.Add procname
+            lineNum = .ProcStartLine(procname, ProcKind) + .ProcCountLines(procname, ProcKind) + 1
+        Loop
+    End With
+    Set ProceduresOfModule = coll
+End Function
+
+
+
+Function getModuleName(Module As VBComponent) As String
+'#INCLUDE GetSheetByCodeName
+'#INCLUDE WorkbookOfModule
+    If Module.Type = vbext_ct_Document Then
+        If Module.Name = "ThisWorkbook" Then
+            getModuleName = Module.Name
+        Else
+           getModuleName = GetSheetByCodeName(WorkbookOfModule(Module), Module.Name).Name
+        End If
+    Else
+        getModuleName = Module.Name
+    End If
+End Function
+
+Function ProtectedVBProject(ByVal wb As Workbook) As Boolean
+    If wb.VBProject.Protection = 1 Then
+        ProtectedVBProject = True
+    Else
+        ProtectedVBProject = False
+    End If
+End Function
+
+Function GetCompText(vbComp As VBComponent) As String
+    Dim codeMod As CodeModule
+    Set codeMod = vbComp.CodeModule
+    If codeMod.CountOfLines = 0 Then GetCompText = "": Exit Function
+    GetCompText = codeMod.Lines(1, codeMod.CountOfLines)
+End Function
+
+Function GetAllText(TargetWorkbook As Workbook) As String
+    Dim Module As VBComponent
+    Dim txt
+    For Each Module In TargetWorkbook.VBProject.VBComponents
+        If Module.CodeModule.CountOfLines > 0 Then
+            txt = txt & vbNewLine & Module.CodeModule.Lines(1, Module.CodeModule.CountOfLines)
+        End If
+    Next
+    GetAllText = txt
+End Function
+
+Public Function GetProcText(vbComp As VBComponent, _
+                            sProcName As Variant, _
+                            Optional bInclHeader As Boolean = True) As String
+    If vbComp Is Nothing Then
+        'sProcName not found
+        Stop
+    End If
+    Dim codeMod As CodeModule
+    Set codeMod = vbComp.CodeModule
+    Dim lProcStart            As Long
+    Dim lProcBodyStart        As Long
+    Dim lProcNoLines          As Long
+    Const vbext_pk_Proc = 0
+    On Error GoTo Error_Handler
+    lProcStart = codeMod.ProcStartLine(sProcName, vbext_pk_Proc)
+    lProcBodyStart = codeMod.ProcBodyLine(sProcName, vbext_pk_Proc)
+    lProcNoLines = codeMod.ProcCountLines(sProcName, vbext_pk_Proc)
+    If bInclHeader = True Then
+        GetProcText = codeMod.Lines(lProcStart, lProcNoLines)
+    Else
+        lProcNoLines = lProcNoLines - (lProcBodyStart - lProcStart)
+        GetProcText = codeMod.Lines(lProcBodyStart, lProcNoLines)
+    End If
+Error_Handler_Exit:
+    On Error Resume Next
+    Exit Function
+Error_Handler:
+    Rem debug.Print _
+    "Error Source: GetProcText" & vbCrLf & _
+    "Error Description: " & err.Description & _
+    Switch(Erl = 0, vbNullString, Erl <> 0, vbCrLf & "Line No: " & Erl)
+    Resume Error_Handler_Exit
+End Function
+
+Sub DisplayErrorText(Context As String, ErrNum As Long)
+    '''''''''''''''''''''''''''''''''''''''''''''''''''
+    ' Displays a standard error message box. For this
+    ' procedure, ErrNum should be the number returned
+    ' by the GetLastError API function or the value
+    ' of Err.LastDllError. It is NOT the number
+    ' returned by Err.Number.
+    '''''''''''''''''''''''''''''''''''''''''''''''''''
+'#INCLUDE GetSystemErrorMessageText
+    Dim ErrText As String
+    ErrText = GetSystemErrorMessageText(ErrNum)
+    MsgBox Context & vbCrLf & _
+           "Error Number: " & CStr(ErrNum) & vbCrLf & _
+           "Error Text:   " & ErrText, vbOKOnly
+
+End Sub
+
+'''
+''' This function gets the system error message text that corresponds to the error code *errNumber*.
+''' This value is the value returned by Err.LastDLLError or by GetLastError, or occasionally as the
+''' returned result of a Windows API function.
+'''
+''' These are NOT the error numbers returned by Err.Number (for these errors, use Err.Description
+''' to get the description of the error).
+'''
+''' In general, you should use Err.LastDllError rather than GetLastError because under some
+''' circumstances the value of GetLastError will be reset to 0 before the value is returned to VBA.
+''' Err.LastDllError will always reliably return the last error number raised in an API function.
+'''
+''' The function returns vbNullString is an error occurred or if there is no error text for the
+''' specified error number.
+'''
+Private Function GetSystemErrorMessageText(errNumber As Long) As String
+
+Dim ErrorText               As String
+Dim textLen                 As Long
+Dim FormatMessageResult     As Long
+Dim langID                  As Long
+    
+    ''''''''''''''''''''''''''''''''
+    ' Initialize the variables
+    ''''''''''''''''''''''''''''''''
+    langID = 0&   ' Default language
+    ErrorText = VBA.String$(FORMAT_MESSAGE_TEXT_LEN, vbNullChar)
+    textLen = FORMAT_MESSAGE_TEXT_LEN
+    
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    ' Call FormatMessage to get the text of the error message text
+    ' associated with errNumber.
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    FormatMessageResult = FormatMessage( _
+                            dwFlags:=FORMAT_MESSAGE_FROM_SYSTEM Or _
+                                     FORMAT_MESSAGE_IGNORE_INSERTS, _
+                            lpSource:=0&, _
+                            dwMessageId:=errNumber, _
+                            dwLanguageId:=langID, _
+                            lpBuffer:=ErrorText, _
+                            nSize:=textLen, _
+                            Arguments:=0&)
+    
+    If FormatMessageResult = 0& Then
+        ''''''''''''''''''''''''''''''''''''''''''''''''''
+        ' An error occured. Display the error number, but
+        ' don't call GetSystemErrorMessageText to get the
+        ' text, which would likely cause the error again,
+        ' getting us into a loop.
+        ''''''''''''''''''''''''''''''''''''''''''''''''''
+        MsgBox "An error occurred with the FormatMessage" & _
+               " API function call." & vbCrLf & _
+               "Error: " & CStr(err.LastDllError) & _
+               " VBA.Hex(" & VBA.Hex(err.LastDllError) & ")."
+        GetSystemErrorMessageText = "An internal system error occurred with the" & vbCrLf & _
+            "FormatMessage API function: " & CStr(err.LastDllError) & ". No futher information" & vbCrLf & _
+            "is available."
+        Exit Function
+    End If
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    ' If FormatMessageResult is not zero, it is the number
+    ' of characters placed in the ErrorText variable.
+    ' Take the left FormatMessageResult characters and
+    ' return that text.
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    ErrorText = VBA.Left$(ErrorText, FormatMessageResult)
+    '''''''''''''''''''''''''''''''''''''''''''''
+    ' Get rid of the trailing vbCrLf, if present.
+    '''''''''''''''''''''''''''''''''''''''''''''
+    If VBA.Len(ErrorText) >= 2 Then
+        If VBA.Right$(ErrorText, 2) = vbCrLf Then
+            ErrorText = VBA.Left$(ErrorText, VBA.Len(ErrorText) - 2)
+        End If
+    End If
+    
+    ''''''''''''''''''''''''''''''''
+    ' Return the error text as the
+    ' result.
+    ''''''''''''''''''''''''''''''''
+    GetSystemErrorMessageText = ErrorText
+
+End Function
+
+'''
+''' If [reverse] is omitted or FALSE, the function returns the portion of *text* that is to the
+''' left of the first vbNullChar character. The vbNullChar is not returned. If *reverse* is TRUE,
+''' the function returns the portion to the left of the last vbNullChar. The vbNullChar is not
+''' returned. In either case, if vbNullChar is not found, the entire string Text is returned.
+'''
+Private Function TrimToNull(Text As String, Optional reverse As Boolean = False) As String
+
+Dim pos         As Long
+
+    If (reverse = False) Then
+        pos = VBA.InStr(1, Text, vbNullChar, vbTextCompare)
+    Else
+        pos = VBA.InStrRev(Text, vbNullChar, -1, vbTextCompare)
+    End If
+    If pos Then
+        TrimToNull = VBA.Left(Text, pos - 1)
+    Else
+        TrimToNull = Text
+    End If
+    
+End Function
+
+Public Function GetSheetByCodeName(wb As Workbook, CodeName As String) As Worksheet
+    Dim sh As Worksheet
+    For Each sh In wb.Worksheets
+        If UCase(sh.CodeName) = UCase(CodeName) Then Set GetSheetByCodeName = sh: Exit For
+    Next sh
+End Function
+
+Function WorkbookOfModule(vbComp As VBComponent) As Workbook
+'#INCLUDE WorkbookOfProject
+    Set WorkbookOfModule = WorkbookOfProject(vbComp.Collection.parent)
+End Function
+
+
+
+Function WorkbookOfProject(vbProj As VBProject) As Workbook
+    TmpStr = vbProj.FileName
+    TmpStr = Right(TmpStr, Len(TmpStr) - InStrRev(TmpStr, "\"))
+    Set WorkbookOfProject = Workbooks(TmpStr)
+End Function
+
