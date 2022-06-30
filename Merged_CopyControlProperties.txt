@@ -3,7 +3,7 @@
 'https://bettersolutions.com/vba/visual-basic-editor/extensibility.htm
 
 ''''''''''''''''''''''''''''''
-'Contains the following procedures #8
+'Contains the following procedures
 ''''''''''''''''''''''''''''''
 'ActiveModule
 'CopyControlProperties
@@ -11,7 +11,6 @@
 'SelectedControl
 'SelectedControls
 'WorksheetExists
-'sheetExists
 'PasteControlProperties
 
 
@@ -108,12 +107,4 @@ Function WorksheetExists(shtName As String, Optional wb As Workbook) As Boolean
     On Error GoTo 0
     WorksheetExists = Not sht Is Nothing
 End Function
-
-
-Function sheetExists(sheetToFind As String, Optional InWorkbook As Workbook) As Boolean
-    If InWorkbook Is Nothing Then Set InWorkbook = ThisWorkbook
-    On Error Resume Next
-    sheetExists = Not InWorkbook.Sheets(sheetToFind) Is Nothing
-End Function
-
 
