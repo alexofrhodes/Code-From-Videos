@@ -1,0 +1,381 @@
+
+Sub BookmarkSave(Optional Index As Long = 0)
+    Dim ws As Worksheet
+    Set ws = CreateOrSetSheet("VbeBookmarks", ThisWorkbook)
+    Dim cell As Range
+    If Index = 0 Then
+        Set cell = ws.Range("A9999").End(xlUp)
+        If cell <> "" Then Set cell = cell.Offset(1, 0)
+    Else
+        Set cell = ws.Cells(Index, 1)
+    End If
+    Dim delim As String
+        delim = " | "
+    Dim BookmarkLine As String
+        BookmarkLine = ActiveCodepaneWorkbook.Name & delim & _
+                        ActiveModule.Name & delim & _
+                        ActiveProcedure & delim & _
+                        ActiveModule.CodeModule.Lines(CodePaneSelectionStartLine, 1)
+    cell = cell.row
+    cell.Offset(0, 1) = BookmarkLine
+    
+'    Dim bmStartLine As Long
+'    Dim bmEndline As Long
+'    Dim bmStartColumn As Long
+'    Dim bmEndColumn As Long
+'    bmStartLine = CodePaneSelectionStartLine
+'    bmEndline = CodePaneSelectionEndLine
+'    bmStartColumn = CodePaneSelectionStartColumn
+'    bmEndColumn = CodePaneSelectionEndColumn
+'    cell.Offset(0, 2) = Join(Array(bmStartLine, bmStartColumn, bmEndline, bmEndColumn), delim)
+End Sub
+
+Sub bmSave1(): BookmarkSave 1: End Sub
+Sub bmSave2(): BookmarkSave 2: End Sub
+Sub bmSave3(): BookmarkSave 3: End Sub
+Sub bmSave4(): BookmarkSave 4: End Sub
+Sub bmSave5(): BookmarkSave 5: End Sub
+
+Sub BookmarkList()
+    Dim ws As Worksheet
+    Set ws = CreateOrSetSheet("VbeBookmarks", ThisWorkbook)
+    Dim cell As Range, rng As Range
+    For Each cell In ws.Columns(1).SpecialCells(xlCellTypeConstants)
+        If rng Is Nothing Then
+            Set rng = Union(cell, cell.Offset(0, 1))
+        Else
+            Set rng = Union(rng, Union(cell, cell.Offset(0, 1)))
+        End If
+    Next
+    dp rng
+End Sub
+
+Sub BookmarkLoad(Optional Index As Long = 0)
+    Dim ws As Worksheet
+    Set ws = CreateOrSetSheet("VbeBookmarks", ThisWorkbook)
+    Dim cell As Range
+    If Index = 0 Then
+        Set cell = ws.Cells(9999, 1).End(xlUp)
+    Else
+        Set cell = ws.Cells(Index, 1)
+    End If
+    If cell = "" Then Exit Sub
+    Dim var
+    Dim delim As String
+    delim = " | "
+    Dim Procedure As String
+    var = Split(cell.Offset(0, 1), delim)
+    TargetWorkbookName = var(0)
+    ModuleName = var(1)
+    Procedure = var(2)
+    BookmarkLine = var(3)
+    
+    Dim SelectedInLine
+        SelectedInLine = Split(cell.Offset(2), delim)
+        
+'    Dim bmStartLine As Long
+'    Dim bmEndline As Long
+'    Dim bmStartColumn As Long
+'    Dim bmEndColumn As Long
+'    bmStartLine = SelectedInLine(0)
+'    bmEndline = SelectedInLine(1)
+'    bmStartColumn = SelectedInLine(2)
+'    bmEndColumn = SelectedInLine(3)
+    
+    Dim Module As VBComponent
+    On Error Resume Next
+    Set Module = ModuleOfProcedure(Workbooks(TargetWorkbookName), Procedure)
+    On Error GoTo 0
+    If Module Is Nothing Then
+        Set Module = Workbooks(TargetWorkbookName).VBProject.VBComponents(moulename)
+        GoToModule Module
+        Exit Sub
+    Else
+        GoToModule Module
+        ProcFirstline = ProcedureFirstLine(Module, Procedure)
+        Module.CodeModule.CodePane.SetSelection ProcFirstline, 1, ProcFirstline, 1
+        Dim i As Long
+        For i = ProcFirstline To Module.CodeModule.CountOfLines
+            If InStr(1, Module.CodeModule.Lines(i, 1), BookmarkLine, vbTextCompare) > 0 Then
+                Module.CodeModule.CodePane.SetSelection i, 1, i, Len(BookmarkLine)
+                Exit Sub
+            End If
+        Next
+    End If
+End Sub
+
+Sub bmload1(): BookmarkLoad 1: End Sub
+Sub bmload2(): BookmarkLoad 2: End Sub
+Sub bmload3(): BookmarkLoad 3: End Sub
+Sub bmload4(): BookmarkLoad 4: End Sub
+Sub bmload5(): BookmarkLoad 5: End Sub
+
+Sub BookmarkDelete(Optional Index As Long)
+    Dim ws As Worksheet
+    Set ws = CreateOrSetSheet("VbeBookmarks", ThisWorkbook)
+    Dim cell As Range
+    If Index = 0 Then
+        Set cell = ws.Cells(9999, 1).End(xlUp)
+        cell.EntireRow.Cells.Clear
+    Else
+        ws.Cells(Index, 1).EntireRow.Cells.Clear
+    End If
+End Sub
+
+Sub BookmarkReset()
+    Dim ws As Worksheet
+    Set ws = CreateOrSetSheet("VbeBookmarks", ThisWorkbook)
+    ws.Cells.Clear
+End Sub
+
+Function CreateOrSetSheet(SheetName As String, TargetWorkbook As Workbook) As Worksheet
+    '#INCLUDE WorksheetExists
+    Dim NewSheet As Worksheet
+    If WorksheetExists(SheetName, TargetWorkbook) = True Then
+        Set CreateOrSetSheet = TargetWorkbook.Sheets(SheetName)
+    Else
+        Set CreateOrSetSheet = TargetWorkbook.Sheets.Add
+        CreateOrSetSheet.Name = SheetName
+    End If
+End Function
+
+Function WorksheetExists(shtName As String, Optional wb As Workbook) As Boolean
+    Dim sht As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook
+    End If
+    On Error Resume Next
+    Set sht = wb.Sheets(shtName)
+    On Error GoTo 0
+    WorksheetExists = Not sht Is Nothing
+End Function
+
+
+Sub dp(var As Variant)
+    Dim element As Variant
+    Select Case TypeName(var)
+        Case Is = "String", "Long", "Integer", "Boolean"
+            Debug.Print var
+        Case Is = "Variant()", "String()", "Long()", "Integer()"
+            If ArrayDimensions(var) = 1 Then
+                Dim i As Long
+                For i = LBound(var) To UBound(var)
+                    Debug.Print var(i)
+                Next i
+            ElseIf ArrayDimensions(var) > 1 Then
+                DPH var
+            End If
+        Case Is = "Collection"
+            For Each element In var
+                dp element
+            Next element
+        Case Is = "Range"
+            dp var.Value
+        Case Is = "Date"
+            Debug.Print var
+        Case Else
+    End Select
+End Sub
+
+Function DpHeader(str As Variant, Optional lvl As Integer = 1, Optional Character As String = "'", _
+                  Optional top As Boolean, Optional bottom As Boolean) As String
+    If lvl < 1 Then lvl = 1
+    If Character = "" Then Character = "'"
+    Dim Indentation As Integer
+    Indentation = (lvl * 4) - 4 + 1
+    Dim QUOTE As String: QUOTE = "'"
+    Dim s As String
+    Dim element As Variant
+    If top = True Then s = vbNewLine & QUOTE & String(Indentation + LargestLength(str), Character) & vbNewLine
+    If TypeName(str) <> "String" Then
+        For Each element In str
+            s = s & QUOTE & String(Indentation, Character) & element & vbNewLine
+        Next
+    Else
+        s = s & QUOTE & String(Indentation, Character) & str
+    End If
+    If bottom = True Then s = s & QUOTE & String(Indentation + LargestLength(str), Character)
+    DpHeader = s
+End Function
+
+Public Function Len2( _
+       ByVal val As Variant) _
+        As Integer
+    If IsArray(val) And right(TypeName(val), 2) = "()" Then
+        Len2 = UBound(val) - LBound(val) + 1
+    ElseIf TypeName(val) = "String" Then
+        Len2 = Len(val)
+    ElseIf IsNumeric(val) Then
+        Len2 = Len(CStr(val))
+    Else
+        Len2 = val.Count
+    End If
+End Function
+
+Function LargestLength(Optional myObj) As Long
+    LargestLength = 0
+    Dim element As Variant
+    If IsMissing(myObj) Then
+        If TypeName(Selection) = "Range" Then
+            Set myObj = Selection
+        Else
+            Exit Function
+        End If
+    End If
+    Select Case TypeName(myObj)
+        Case Is = "String"
+            LargestLength = Len(myObj)
+        Case "Collection"
+            For Each element In myObj
+                If Len(element) > LargestLength Then LargestLength = Len(element)
+            Next element
+        Case "Variant", "Variant()", "String()"
+            For element = LBound(myObj) To UBound(myObj)
+                If Len(myObj(element)) > LargestLength Then LargestLength = Len(myObj(element))
+            Next
+        Case Else
+    End Select
+End Function
+
+Sub DPH(ByVal Hairetu, Optional HyoujiMaxNagasa%, Optional HairetuName$)
+    Call DebugPrintHairetu(Hairetu, HyoujiMaxNagasa, HairetuName)
+End Sub
+
+Sub DebugPrintHairetu(ByVal Hairetu, Optional HyoujiMaxNagasa%, Optional HairetuName$)
+    Dim i&, j&, k&, m&, N&
+    Dim TateMin&, TateMax&, YokoMin&, YokoMax&
+    Dim WithTableHairetu
+    Dim NagasaList, MaxNagasaList
+    Dim NagasaOnajiList
+    Dim OutputList
+    Const SikiriMoji$ = "|"
+    Dim Jigen2%
+    On Error Resume Next
+    Jigen2 = UBound(Hairetu, 2)
+    On Error GoTo 0
+    If Jigen2 = 0 Then
+        Hairetu = Application.Transpose(Hairetu)
+    End If
+    TateMin = LBound(Hairetu, 1)
+    TateMax = UBound(Hairetu, 1)
+    YokoMin = LBound(Hairetu, 2)
+    YokoMax = UBound(Hairetu, 2)
+    ReDim WithTableHairetu(1 To TateMax - TateMin + 1 + 1, 1 To YokoMax - YokoMin + 1 + 1)
+    For i = 1 To TateMax - TateMin + 1
+        WithTableHairetu(i + 1, 1) = TateMin + i - 1
+        For j = 1 To YokoMax - YokoMin + 1
+            WithTableHairetu(1, j + 1) = YokoMin + j - 1
+            WithTableHairetu(i + 1, j + 1) = Hairetu(i - 1 + TateMin, j - 1 + YokoMin)
+        Next j
+    Next i
+    N = UBound(WithTableHairetu, 1)
+    m = UBound(WithTableHairetu, 2)
+    ReDim NagasaList(1 To N, 1 To m)
+    ReDim MaxNagasaList(1 To m)
+    Dim TmpStr$
+    For j = 1 To m
+        For i = 1 To N
+            If j > 1 And HyoujiMaxNagasa <> 0 Then
+                TmpStr = WithTableHairetu(i, j)
+                WithTableHairetu(i, j) = ShortenToByteCharacters(TmpStr, HyoujiMaxNagasa)
+            End If
+            NagasaList(i, j) = LenB(StrConv(WithTableHairetu(i, j), vbFromUnicode))
+            MaxNagasaList(j) = WorksheetFunction.Max(MaxNagasaList(j), NagasaList(i, j))
+        Next i
+    Next j
+    ReDim NagasaOnajiList(1 To N, 1 To m)
+    Dim TmpMaxNagasa&
+    For j = 1 To m
+        TmpMaxNagasa = MaxNagasaList(j)
+        For i = 1 To N
+            NagasaOnajiList(i, j) = WithTableHairetu(i, j) & WorksheetFunction.Rept(" ", TmpMaxNagasa - NagasaList(i, j))
+        Next i
+    Next j
+    ReDim OutputList(1 To N)
+    For i = 1 To N
+        For j = 1 To m
+            If j = 1 Then
+                OutputList(i) = NagasaOnajiList(i, j)
+            Else
+                OutputList(i) = OutputList(i) & SikiriMoji & NagasaOnajiList(i, j)
+            End If
+        Next j
+    Next i
+    Debug.Print HairetuName
+    For i = 1 To N
+        Debug.Print OutputList(i)
+    Next i
+End Sub
+
+Function ShortenToByteCharacters(Mojiretu$, ByteNum%)
+    Dim OriginByte%
+    Dim Output
+    OriginByte = LenB(StrConv(Mojiretu, vbFromUnicode))
+    If OriginByte <= ByteNum Then
+        Output = Mojiretu
+    Else
+        Dim RuikeiByteList, BunkaiMojiretu
+        RuikeiByteList = CalculateByteCharacters(Mojiretu)
+        BunkaiMojiretu = TextDecomposition(Mojiretu)
+        Dim AddMoji$
+        AddMoji = "."
+        Dim i&, N&
+        N = Len(Mojiretu)
+        For i = 1 To N
+            If RuikeiByteList(i) < ByteNum Then
+                Output = Output & BunkaiMojiretu(i)
+            ElseIf RuikeiByteList(i) = ByteNum Then
+                If LenB(StrConv(BunkaiMojiretu(i), vbFromUnicode)) = 1 Then
+                    Output = Output & AddMoji
+                Else
+                    Output = Output & AddMoji & AddMoji
+                End If
+                Exit For
+            ElseIf RuikeiByteList(i) > ByteNum Then
+                Output = Output & AddMoji
+                Exit For
+            End If
+        Next i
+    End If
+    ShortenToByteCharacters = Output
+End Function
+
+Function CalculateByteCharacters(Mojiretu$)
+    Dim MojiKosu%
+    MojiKosu = Len(Mojiretu)
+    Dim Output
+    ReDim Output(1 To MojiKosu)
+    Dim i&
+    Dim TmpMoji$
+    For i = 1 To MojiKosu
+        TmpMoji = Mid(Mojiretu, i, 1)
+        If i = 1 Then
+            Output(i) = LenB(StrConv(TmpMoji, vbFromUnicode))
+        Else
+            Output(i) = LenB(StrConv(TmpMoji, vbFromUnicode)) + Output(i - 1)
+        End If
+    Next i
+    CalculateByteCharacters = Output
+End Function
+
+Function TextDecomposition(Mojiretu$)
+    Dim i&, N&
+    Dim Output
+    N = Len(Mojiretu)
+    ReDim Output(1 To N)
+    For i = 1 To N
+        Output(i) = Mid(Mojiretu, i, 1)
+    Next i
+    TextDecomposition = Output
+End Function
+
+Function ArrayDimensions(ByVal vArray As Variant) As Long
+    Dim dimnum As Long
+    On Error GoTo FinalDimension
+    For dimnum = 1 To 60000
+        ErrorCheck = LBound(vArray, dimnum)
+    Next
+FinalDimension:
+    ArrayDimensions = dimnum - 1
+End Function
+
