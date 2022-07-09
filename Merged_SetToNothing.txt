@@ -1,3 +1,5 @@
+'https://youtu.be/7lljTTMCOw8
+
 ''''''''''''''''''''''''''''''
 'Contains the following procedures #7
 ''''''''''''''''''''''''''''''
@@ -107,8 +109,8 @@ Function InStrExact(Start As Long, SourceText As String, WordToFind As String, _
                     Optional CaseSensitive As Boolean = False, _
                     Optional AllowAccentedCharacters As Boolean = False) As Long
     Dim x As Long, Str1 As String, Str2 As String, Pattern As String
-    Const UpperAccentsOnly As String = "ÇÉÑ"
-    Const UpperAndLowerAccents As String = "ÇÉÑçéñ"
+    Const UpperAccentsOnly As String = "Ã‡Ã‰Ã‘"
+    Const UpperAndLowerAccents As String = "Ã‡Ã‰Ã‘Ã§Ã©Ã±"
     If CaseSensitive Then
         Str1 = SourceText
         Str2 = WordToFind
