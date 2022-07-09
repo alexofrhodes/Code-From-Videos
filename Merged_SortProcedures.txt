@@ -1,0 +1,337 @@
+'VIDEO
+'https://youtu.be/PC-8XTnAL7Q
+'https://vk.com/video735281600_456239029
+
+
+'NEEDS REFERENCE TO VBA EXTENSIBILITY LIBRARY
+
+'Contains:
+
+'SortProceduresInModule
+'SeparatePublicAndPrivateInModule
+'SeparateProceduresAndFunctionsInModule
+'MoveProceduresFromUserformToModule
+
+Public Enum LineSplits
+    REMOVE_LINE_SPLITS = 0
+    KEEP_LINE_SPLITS = 1
+    CONVERT_LINE_SPLITS = 2
+End Enum
+
+Public Sub SortProceduresInModule(Optional Module As VBComponent)
+'#INCLUDE ActiveModule
+'#INCLUDE SortArray
+'#INCLUDE GetProcText
+    If Module Is Nothing Then Set Module = ActiveModule
+    If Module.CodeModule.CountOfLines = 0 Then Exit Sub
+    Dim vArr: vArr = ProcListArray(Module)
+    Dim StartLine As Long: StartLine = Module.CodeModule.ProcStartLine(vArr(0), vbext_pk_Proc)
+    Dim totalLines As Long: totalLines = Module.CodeModule.CountOfLines - Module.CodeModule.CountOfDeclarationLines
+    vArr = SortArray(vArr) ', LBound(vArr), UBound(vArr))
+    Dim ReplacedProcedures As String
+    Dim i As Long
+    For i = LBound(vArr) To UBound(vArr)
+        If ReplacedProcedures = "" Then
+            ReplacedProcedures = GetProcText(Module, CStr(vArr(i)))
+        Else
+            ReplacedProcedures = ReplacedProcedures & vbNewLine & _
+            GetProcText(Module, CStr(vArr(i)))
+        End If
+    Next i
+    Module.CodeModule.DeleteLines StartLine, totalLines
+    Module.CodeModule.AddFromString ReplacedProcedures
+End Sub
+
+Public Sub SeparatePublicAndPrivateInModule(Optional vbComp As VBComponent)
+'#INCLUDE ProcListArray
+'#INCLUDE SortArray 
+'INCLUDE GetProcedureDeclaration
+
+    If vbComp Is Nothing Then Set vbComp = ActiveModule
+    If vbComp.CodeModule.CountOfLines = 0 Then Exit Sub
+    Dim StartLine As Long
+    StartLine = vbComp.CodeModule.CountOfDeclarationLines ' ProcStartLine(vArr(0), vbext_pk_Proc)
+    Dim totalLines As Long
+    totalLines = vbComp.CodeModule.CountOfLines - vbComp.CodeModule.CountOfDeclarationLines
+    Dim ThePublic As String, ThePrivate As String, TheOther As String
+    Dim sProcedureDeclaration As String
+    Dim sProcedureText As String
+    Dim sProcedureName As String
+    Dim i As Long
+    Dim vArr
+    vArr = ProcListArray(vbComp)
+    SortArray vArr ', LBound(vArr), UBound(vArr)
+    For i = LBound(vArr) To UBound(vArr)
+        sProcedureName = CStr(vArr(i))
+        sProcedureDeclaration = GetProcedureDeclaration(vbComp, sProcedureName, 0)
+        sProcedureText = GetProcText(vbComp, sProcedureName)
+        If InStr(1, sProcedureDeclaration, "Public ") > 0 Then
+            ThePublic = IIf(ThePublic = "", sProcedureText, ThePublic & vbNewLine & sProcedureText)
+        Else
+            ThePrivate = IIf(ThePrivate = "", sProcedureText, ThePrivate & vbNewLine & sProcedureText)
+        End If
+    Next i
+    vbComp.CodeModule.DeleteLines IIf(StartLine <> 0, StartLine, StartLine + 1), totalLines
+    vbComp.CodeModule.AddFromString ThePrivate & vbNewLine 'adds to beginning so this will be last
+    vbComp.CodeModule.AddFromString ThePublic & vbNewLine
+End Sub
+
+Public Sub SeparateProceduresAndFunctionsInModule(Optional vbComp As VBComponent)
+'#INCLUDE ActiveModule
+'#INCLUDE ProcListArray
+'#INCLUDE GetProcedureDeclaration
+'#INCLUDE GetProcText
+    If vbComp Is Nothing Then Set vbComp = ActiveModule
+    If vbComp.CodeModule.CountOfLines = 0 Then Exit Sub
+    Dim StartLine As Long
+    StartLine = vbComp.CodeModule.CountOfDeclarationLines ' ProcStartLine(vArr(0), vbext_pk_Proc)
+    Dim totalLines As Long
+    totalLines = vbComp.CodeModule.CountOfLines - vbComp.CodeModule.CountOfDeclarationLines
+    Dim TheSubs As String, TheFunctions As String, TheOther As String
+    Dim sProcedureDeclaration As String
+    Dim sProcedureText As String
+    Dim sProcedureName As String
+    Dim i As Long
+    Dim vArr
+    vArr = ProcListArray(vbComp)
+    SortArray vArr ', LBound(vArr), UBound(vArr)
+    For i = LBound(vArr) To UBound(vArr)
+        sProcedureName = CStr(vArr(i))
+        sProcedureDeclaration = GetProcedureDeclaration(vbComp, sProcedureName, 0)
+        sProcedureText = GetProcText(vbComp, sProcedureName)
+        If InStr(1, sProcedureDeclaration, "Sub " & sProcedureName) > 0 Then
+            TheSubs = IIf(TheSubs = "", sProcedureText, TheSubs & vbNewLine & sProcedureText)
+        ElseIf InStr(1, sProcedureDeclaration, "Function " & sProcedureName) > 0 Then
+            TheFunctions = IIf(TheFunctions = "", sProcedureText, TheFunctions & vbNewLine & sProcedureText)
+        End If
+    Next i
+    vbComp.CodeModule.DeleteLines IIf(StartLine <> 0, StartLine, StartLine + 1), totalLines
+    vbComp.CodeModule.AddFromString TheFunctions & vbNewLine 'adds to beginning so this will be last
+    vbComp.CodeModule.AddFromString TheSubs & vbNewLine
+End Sub
+
+Sub MoveProceduresFromUserformToModule(Optional FORM As VBComponent)
+'#INCLUDE ActiveModule
+'#INCLUDE CreateOrSetModule
+'#INCLUDE ProcListCollection
+'#INCLUDE WorkbookOfModule
+    If FORM Is Nothing Then Set FORM = ActiveModule
+    Rem Procedures without underscore "_" can be moved to a module
+    Rem possible error in use of procedures if the procedures rely on const or enums or variables contained in form codemodule
+    If FORM.Type <> vbext_ct_MSForm Then Exit Sub
+    Dim TargetModule As VBComponent
+    Set TargetModule = CreateOrSetModule("m" & FORM.Name, vbext_ct_StdModule, WorkbookOfModule(FORM))
+    Dim strProc As String, StartLine As Long, totalLines As Long
+    Dim PROCEDURE As Variant
+    Dim Procedures As New Collection
+    Set Procedures = ProcListCollection(FORM)
+    For Each PROCEDURE In Procedures
+        If InStr(1, PROCEDURE, "_") > 0 Then
+            'nothing
+        Else
+            strProc = GetProcText(FORM, CStr(PROCEDURE))
+            StartLine = FORM.CodeModule.ProcStartLine(CStr(PROCEDURE), vbext_pk_Proc)
+            totalLines = FORM.CodeModule.ProcCountLines(CStr(PROCEDURE), vbext_pk_Proc)
+            TargetModule.CodeModule.AddFromString strProc
+            FORM.CodeModule.DeleteLines StartLine, totalLines
+        End If
+    Next PROCEDURE
+End Sub
+
+''''''''
+'HELPERS
+''''''''
+
+Function CreateOrSetModule(compName As String, compType As VBIDE.vbext_ComponentType, Optional TargetWorkbook As Workbook) As VBComponent
+'#INCLUDE ActiveCodepaneWorkbook
+'#INCLUDE CreateOrSetModule 
+    If TargetWorkbook Is Nothing Then Set TargetWorkbook = ActiveCodepaneWorkbook
+    Dim vbComp As VBComponent
+    On Error Resume Next
+    Set vbComp = TargetWorkbook.VBProject.VBComponents(compName)
+    On Error GoTo 0
+    If vbComp Is Nothing Then
+        Set vbComp = TargetWorkbook.VBProject.VBComponents.Add(compType)
+        vbComp.Name = compName
+    End If
+    Set CreateOrSetModule = vbComp
+End Function
+
+Public Function ActiveCodepaneWorkbook() As Workbook
+    Dim TmpStr As String
+    TmpStr = Application.VBE.SelectedVBComponent.Collection.parent.FileName
+    TmpStr = Right(TmpStr, Len(TmpStr) - InStrRev(TmpStr, "\"))
+    Set ActiveCodepaneWorkbook = Workbooks(TmpStr)
+End Function
+
+Function ActiveModule() As VBComponent
+    Set ActiveModule = Application.VBE.SelectedVBComponent
+End Function
+
+Public Function GetProcedureDeclaration(Module As VBComponent, _
+    procname As String, _
+    Optional LineSplitBehavior As LineSplits = REMOVE_LINE_SPLITS)
+'#INCLUDE SingleSpace
+REM INCLUDE ENUM LINESPLITS
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    Dim lineNum As Long
+    Dim s As String
+    Dim Declaration As String
+    On Error Resume Next
+    lineNum = Module.CodeModule.ProcBodyLine(procname, ProcKind)
+    If err.Number <> 0 Then
+        Exit Function
+    End If
+    s = Module.CodeModule.Lines(lineNum, 1)
+    Do While Right(s, 1) = "_"
+        Select Case True
+        Case LineSplitBehavior = CONVERT_LINE_SPLITS
+            s = left(s, Len(s) - 1) & vbNewLine
+        Case LineSplitBehavior = KEEP_LINE_SPLITS
+            s = s & vbNewLine
+        Case LineSplitBehavior = REMOVE_LINE_SPLITS
+            s = left(s, Len(s) - 1) & " "
+        End Select
+        Declaration = Declaration & s
+        lineNum = lineNum + 1
+        s = Module.CodeModule.Lines(lineNum, 1)
+    Loop
+    Declaration = SingleSpace(Declaration & s)
+    GetProcedureDeclaration = Declaration
+End Function
+
+Public Function SingleSpace(ByVal text As String) As String
+    Dim pos As String
+    pos = InStr(1, text, Space(2), vbBinaryCompare)
+    Do Until pos = 0
+        text = Replace(text, Space(2), Space(1))
+        pos = InStr(1, text, Space(2), vbBinaryCompare)
+    Loop
+    SingleSpace = text
+End Function
+
+Public Function SortArray(ByVal sortableArray As Variant, Optional ByVal descendingFlag As Boolean) As Variant
+    '@Description: This function is an implementation of Bubble Sort, allowing the user to sort an array,
+    '               optionally allowing the user to specify the array to be sorted in descending order
+    '@Author: Anthony Mancini
+    '@Version: 1.0.0
+    '@License: MIT
+    '@Param: sortableArray is the array that will be sorted
+    '@Param: descendingFlag changes the sort to descending
+    '@Returns: Returns the a sorted array
+    '@Example: =Sort({1,3,2}) -> {1,2,3}
+    '@Example: =Sort({1,3,2}, True) -> {3,2,1}
+    Dim i As Integer
+    Dim swapOccuredBool As Boolean
+    Dim arrayLength As Integer
+    arrayLength = UBound(sortableArray) - LBound(sortableArray) + 1
+    Dim sortedArray() As Variant
+    ReDim sortedArray(arrayLength)
+    Dim dif As Long
+    dif = IIf(LBound(sortableArray) = 1, 1, 0)
+    For i = 0 To arrayLength - 1
+        sortedArray(i) = sortableArray(i + dif)
+    Next
+    Dim temporaryValue As Variant
+    Do
+        swapOccuredBool = False
+        For i = 0 To arrayLength - 1
+            If (sortedArray(i)) < sortedArray(i + 1) Then
+                temporaryValue = sortedArray(i)
+                sortedArray(i) = sortedArray(i + 1)
+                sortedArray(i + 1) = temporaryValue
+                swapOccuredBool = True
+            End If
+        Next
+    Loop While swapOccuredBool
+    If descendingFlag = True Then
+        SortArray = sortedArray
+    Else
+        Dim ascendingArray() As Variant
+        ReDim ascendingArray(arrayLength)
+        For i = 0 To arrayLength - 1
+            ascendingArray(i) = sortedArray(arrayLength - i - 1)
+        Next
+        SortArray = ascendingArray
+    End If
+End Function
+
+Function WorkbookOfProject(vbProj As VBProject) As Workbook
+    TmpStr = vbProj.FileName
+    TmpStr = Right(TmpStr, Len(TmpStr) - InStrRev(TmpStr, "\"))
+    Set WorkbookOfProject = Workbooks(TmpStr)
+End Function
+
+Function WorkbookOfModule(vbComp As VBComponent) As Workbook
+'#INCLUDE WorkbookOfProject
+    Set WorkbookOfModule = WorkbookOfProject(vbComp.Collection.parent)
+End Function
+
+Function ProcListCollection(Module As VBComponent) As Collection
+    Dim coll As Collection: Set coll = New Collection
+    Dim lineNum As Long, NumLines As Long
+    Dim procname As String
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    lineNum = Module.CodeModule.CountOfDeclarationLines + 1
+    Do Until lineNum >= Module.CodeModule.CountOfLines
+        procname = Module.CodeModule.ProcOfLine(lineNum, ProcKind)
+        If InStr(1, procname, "_") = 0 Then coll.Add procname
+        lineNum = Module.CodeModule.ProcStartLine(procname, ProcKind) + Module.CodeModule.ProcCountLines(procname, ProcKind) + 1
+    Loop
+    Set ProcListCollection = coll
+End Function
+
+Function ProcListArray(Module As VBComponent) As Variant
+    Dim out As String
+    Dim lineNum As Long
+    Dim NumLines As Long
+    Dim procname As String
+    Dim ProcKind As VBIDE.vbext_ProcKind
+    lineNum = Module.CodeModule.CountOfDeclarationLines + 1
+    Do Until lineNum >= Module.CodeModule.CountOfLines
+        procname = Module.CodeModule.ProcOfLine(lineNum, ProcKind)
+        If InStr(1, procname, "_") = 0 Then
+            If out = vbNullString Then
+                out = procname
+            Else
+                out = out & "," & procname
+            End If
+        End If
+        lineNum = Module.CodeModule.ProcStartLine(procname, ProcKind) + Module.CodeModule.ProcCountLines(procname, ProcKind) + 1
+    Loop
+    ProcListArray = Split(out, ",")
+End Function
+
+Public Function GetProcText(vbComp As VBComponent, _
+                            sProcName As Variant, _
+                            Optional bInclHeader As Boolean = True) As String
+    If vbComp Is Nothing Then
+        'sProcName not found
+        Stop
+    End If
+    Dim codeMod As CodeModule
+    Set codeMod = vbComp.CodeModule
+    Dim lProcStart            As Long
+    Dim lProcBodyStart        As Long
+    Dim lProcNoLines          As Long
+    Const vbext_pk_Proc = 0
+    On Error GoTo Error_Handler
+    lProcStart = codeMod.ProcStartLine(sProcName, vbext_pk_Proc)
+    lProcBodyStart = codeMod.ProcBodyLine(sProcName, vbext_pk_Proc)
+    lProcNoLines = codeMod.ProcCountLines(sProcName, vbext_pk_Proc)
+    If bInclHeader = True Then
+        GetProcText = codeMod.Lines(lProcStart, lProcNoLines)
+    Else
+        lProcNoLines = lProcNoLines - (lProcBodyStart - lProcStart)
+        GetProcText = codeMod.Lines(lProcBodyStart, lProcNoLines)
+    End If
+Error_Handler_Exit:
+    On Error Resume Next
+    Exit Function
+Error_Handler:
+    Rem debug.Print _
+    "Error Source: GetProcText" & vbCrLf & _
+    "Error Description: " & err.Description & _
+    Switch(Erl = 0, vbNullString, Erl <> 0, vbCrLf & "Line No: " & Erl)
+    Resume Error_Handler_Exit
+End Function
