@@ -1,41 +1,71 @@
 'Use only sub DP
 
-
-Sub DP(var As Variant)
-'#INCLUDE DPH
-'#INCLUDE ArrayDimensions
-    Dim ELEMENT As Variant
+Public Sub DP(var As Variant)
+    '#INCLUDE DPH
+    '#INCLUDE ArrayDimensions
+    Dim ELEMENT     As Variant
     Select Case TypeName(var)
         Case Is = "String", "Long", "Integer", "Boolean"
             Debug.Print var
         Case Is = "Variant()", "String()", "Long()", "Integer()"
-            If ArrayDimensions(var) = 1 Then
-                Dim i As Long
-                For i = LBound(var) To UBound(var)
-                    Debug.Print var(i)
-                Next i
-            ElseIf ArrayDimensions(var) > 1 Then
-                DPH var
-            End If
+            Call printArray(var)
         Case Is = "Collection"
-            For Each ELEMENT In var
-                dp ELEMENT
-            Next ELEMENT
+            Call printCollection(var)
+        Case Is = "Dictionary"
+            Call printDictionary(var)
         Case Is = "Range"
-            dp var.Value
+            DP var.Value
         Case Is = "Date"
             Debug.Print var
         Case Else
     End Select
 End Sub
+Private Sub printArray(var As Variant)
+    If ArrayDimensions(var) = 1 Then
+        Dim i       As Long
+        For i = LBound(var) To UBound(var)
+            Debug.Print var(i)
+        Next i
+    ElseIf ArrayDimensions(var) > 1 Then
+        DPH var
+    End If
+End Sub
+Private Sub printCollection(var As Variant)
+    Dim elem        As Variant
+    For Each elem In var
+        DP elem
+    Next elem
+End Sub
 
-Sub DPH(ByVal Hairetu, Optional HyoujiMaxNagasa%, Optional HairetuName$)
-'#INCLUDE DebugPrintHairetu
+Private Sub printDictionary(var As Variant)
+    Dim i As Long: Dim iCount As Long
+    Dim arrKeys
+    Dim sKey        As String
+    Dim varItem
+    With var
+        iCount = .Count
+        arrKeys = .Keys
+        iCount = UBound(arrKeys, 1)
+        For i = 0 To iCount
+            sKey = arrKeys(i)
+            If IsObject(.Item(sKey)) Then
+                Debug.Print sKey & " : "
+                DP (.Item(sKey))
+            Else
+                Debug.Print sKey & " : " & .Item(sKey)
+            End If
+        Next i
+    End With
+End Sub
+
+Private Sub DPH(ByVal Hairetu, Optional HyoujiMaxNagasa%, Optional HairetuName$)
+    '#INCLUDE DebugPrintHairetu
     Call DebugPrintHairetu(Hairetu, HyoujiMaxNagasa, HairetuName)
 End Sub
 
-Function ArrayDimensions(ByVal vArray As Variant) As Long
-    Dim dimnum As Long
+Private Function ArrayDimensions(ByVal vArray As Variant) As Long
+    Dim dimnum      As Long
+    Dim ErrorCheck As Long
     On Error GoTo FinalDimension
     For dimnum = 1 To 60000
         ErrorCheck = LBound(vArray, dimnum)
@@ -47,8 +77,8 @@ End Function
 Rem ------------------------
 
 
-Sub DebugPrintHairetu(ByVal Hairetu, Optional HyoujiMaxNagasa%, Optional HairetuName$)
-'#INCLUDE ShortenToByteCharacters
+Private Sub DebugPrintHairetu(ByVal Hairetu, Optional HyoujiMaxNagasa%, Optional HairetuName$)
+    '#INCLUDE ShortenToByteCharacters
     Dim i&, j&, k&, m&, N&
     Dim TateMin&, TateMax&, YokoMin&, YokoMax&
     Dim WithTableHairetu
@@ -70,53 +100,53 @@ Sub DebugPrintHairetu(ByVal Hairetu, Optional HyoujiMaxNagasa%, Optional Hairetu
     ReDim WithTableHairetu(1 To TateMax - TateMin + 1 + 1, 1 To YokoMax - YokoMin + 1 + 1)
     For i = 1 To TateMax - TateMin + 1
         WithTableHairetu(i + 1, 1) = TateMin + i - 1
-            For j = 1 To YokoMax - YokoMin + 1
-                WithTableHairetu(1, j + 1) = YokoMin + j - 1
-                    WithTableHairetu(i + 1, j + 1) = Hairetu(i - 1 + TateMin, j - 1 + YokoMin)
-                    Next j
-                Next i
-                N = UBound(WithTableHairetu, 1)
-                m = UBound(WithTableHairetu, 2)
-                ReDim NagasaList(1 To N, 1 To m)
-                ReDim MaxNagasaList(1 To m)
-                Dim TmpStr$
-                For j = 1 To m
-                    For i = 1 To N
-                        If j > 1 And HyoujiMaxNagasa <> 0 Then
-                            TmpStr = WithTableHairetu(i, j)
-                            WithTableHairetu(i, j) = ShortenToByteCharacters(TmpStr, HyoujiMaxNagasa)
-                            End If
-                            NagasaList(i, j) = LenB(StrConv(WithTableHairetu(i, j), vbFromUnicode))
-                            MaxNagasaList(j) = WorksheetFunction.Max(MaxNagasaList(j), NagasaList(i, j))
-                        Next i
-                    Next j
-                    ReDim NagasaOnajiList(1 To N, 1 To m)
-                    Dim TmpMaxNagasa&
-                    For j = 1 To m
-                        TmpMaxNagasa = MaxNagasaList(j)
-                        For i = 1 To N
-                            NagasaOnajiList(i, j) = WithTableHairetu(i, j) & WorksheetFunction.Rept(" ", TmpMaxNagasa - NagasaList(i, j))
-                        Next i
-                    Next j
-                    ReDim OutputList(1 To N)
-                    For i = 1 To N
-                        For j = 1 To m
-                            If j = 1 Then
-                                OutputList(i) = NagasaOnajiList(i, j)
-                            Else
-                                OutputList(i) = OutputList(i) & SikiriMoji & NagasaOnajiList(i, j)
-                            End If
-                        Next j
-                    Next i
-                    Debug.Print HairetuName
-                    For i = 1 To N
-                        Debug.Print OutputList(i)
-                    Next i
-                End Sub
+        For j = 1 To YokoMax - YokoMin + 1
+            WithTableHairetu(1, j + 1) = YokoMin + j - 1
+            WithTableHairetu(i + 1, j + 1) = Hairetu(i - 1 + TateMin, j - 1 + YokoMin)
+        Next j
+    Next i
+    N = UBound(WithTableHairetu, 1)
+    m = UBound(WithTableHairetu, 2)
+    ReDim NagasaList(1 To N, 1 To m)
+    ReDim MaxNagasaList(1 To m)
+    Dim TmpStr$
+    For j = 1 To m
+        For i = 1 To N
+            If j > 1 And HyoujiMaxNagasa <> 0 Then
+                TmpStr = WithTableHairetu(i, j)
+                WithTableHairetu(i, j) = ShortenToByteCharacters(TmpStr, HyoujiMaxNagasa)
+            End If
+            NagasaList(i, j) = LenB(StrConv(WithTableHairetu(i, j), vbFromUnicode))
+            MaxNagasaList(j) = WorksheetFunction.Max(MaxNagasaList(j), NagasaList(i, j))
+        Next i
+    Next j
+    ReDim NagasaOnajiList(1 To N, 1 To m)
+    Dim TmpMaxNagasa&
+    For j = 1 To m
+        TmpMaxNagasa = MaxNagasaList(j)
+        For i = 1 To N
+            NagasaOnajiList(i, j) = WithTableHairetu(i, j) & WorksheetFunction.Rept(" ", TmpMaxNagasa - NagasaList(i, j))
+        Next i
+    Next j
+    ReDim OutputList(1 To N)
+    For i = 1 To N
+        For j = 1 To m
+            If j = 1 Then
+                OutputList(i) = NagasaOnajiList(i, j)
+            Else
+                OutputList(i) = OutputList(i) & SikiriMoji & NagasaOnajiList(i, j)
+            End If
+        Next j
+    Next i
+    Debug.Print HairetuName
+    For i = 1 To N
+        Debug.Print OutputList(i)
+    Next i
+End Sub
 
-Function ShortenToByteCharacters(Mojiretu$, ByteNum%)
-'#INCLUDE CalculateByteCharacters
-'#INCLUDE TextDecomposition
+Private Function ShortenToByteCharacters(Mojiretu$, ByteNum%)
+    '#INCLUDE CalculateByteCharacters
+    '#INCLUDE TextDecomposition
     Dim OriginByte%
     Dim Output
     OriginByte = LenB(StrConv(Mojiretu, vbFromUnicode))
@@ -149,7 +179,7 @@ Function ShortenToByteCharacters(Mojiretu$, ByteNum%)
     ShortenToByteCharacters = Output
 End Function
 
-Function CalculateByteCharacters(Mojiretu$)
+Private Function CalculateByteCharacters(Mojiretu$)
     Dim MojiKosu%
     MojiKosu = Len(Mojiretu)
     Dim Output
@@ -167,7 +197,7 @@ Function CalculateByteCharacters(Mojiretu$)
     CalculateByteCharacters = Output
 End Function
 
-Function TextDecomposition(Mojiretu$)
+Private Function TextDecomposition(Mojiretu$)
     Dim i&, N&
     Dim Output
     N = Len(Mojiretu)
