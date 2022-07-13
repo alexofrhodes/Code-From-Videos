@@ -1,17 +1,7 @@
-''''''''''''''''''''''''''''''
-'Contains the following procedures #7
-''''''''''''''''''''''''''''''
-'ArrayDimensions
-'CalculateByteCharacters
-'DPH
-'DebugPrintHairetu
-'ShortenToByteCharacters
-'TextDecomposition
-'dp
-'
+'Use only sub DP
 
 
-Sub dp(var As Variant)
+Sub DP(var As Variant)
 '#INCLUDE DPH
 '#INCLUDE ArrayDimensions
     Dim ELEMENT As Variant
