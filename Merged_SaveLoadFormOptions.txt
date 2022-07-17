@@ -18,18 +18,21 @@ Sub SaveOptions(FORM As Object, _
                 Optional includeCheckbox As Boolean = True, _
                 Optional includeOptionButton As Boolean = True, _
                 Optional includeTextBox As Boolean = True, _
-                Optional includeListbox As Boolean = True)
-'#INCLUDE CollectionToArray
-'#INCLUDE CreateOrSetSheet
-'#INCLUDE ListboxSelectedIndexes
+                Optional includeListbox As Boolean = True, _
+                Optional includeToggleButton As Boolean = True)
+    '#INCLUDE CreateOrSetSheet
+    '#INCLUDE ListboxSelectedIndexes
+    '#INCLUDE CollectionToArray
+
     Dim ws As Worksheet
-    Set ws = CreateOrSetSheet(FORM.Name & "_Settings", ThisWorkbook) ' change to activeworkbook for testing
+    Set ws = CreateOrSetSheet(FORM.Name & "_Settings", ThisWorkbook)
     ws.Cells.Clear
     Dim coll As New Collection
     Dim cell As Range
     Set cell = ws.Cells(1, 1)
-    Dim c As MSForms.control
+    Dim c As MSForms.Control
     For Each c In FORM.Controls
+    
         If TypeName(c) Like "CheckBox" Then
             If Not includeCheckbox Then GoTo SKIP
         ElseIf TypeName(c) Like "OptionButton" Then
@@ -38,31 +41,31 @@ Sub SaveOptions(FORM As Object, _
             If Not includeTextBox Then GoTo SKIP
         ElseIf TypeName(c) = "ListBox" Then
             If Not includeListbox Then GoTo SKIP
+        ElseIf TypeName(c) Like "ToggleButton" Then
+            If Not includeToggleButton Then GoTo SKIP
         Else
             GoTo SKIP
         End If
-        
+            
         cell = c.Name
         Select Case TypeName(c)
-        Case "TextBox", "CheckBox", "OptionButton"
-            cell.Offset(0, 1) = c.Value
-        Case "ListBox"
-            Set coll = ListboxSelectedIndexes(c)
-            If coll.count > 0 Then
-                cell.Offset(0, 1) = Join(CollectionToArray(coll), ",")
-            Else
-                cell.Offset(0, 1) = -1
-            End If
+            Case "TextBox", "CheckBox", "OptionButton", "ToggleButton"
+                cell.Offset(0, 1) = c.Value
+            Case "ListBox"
+                Set coll = ListboxSelectedIndexes(c)
+                If coll.Count > 0 Then
+                    cell.Offset(0, 1) = Join(CollectionToArray(coll), ",")
+                Else
+                    cell.Offset(0, 1) = -1
+                End If
         End Select
-        
         Set cell = cell.Offset(1, 0)
 SKIP:
     Next
 End Sub
 
 Function CreateOrSetSheet(SheetName As String, TargetWorkbook As Workbook) As Worksheet
-    '#INCLUDE WorksheetExists
-'#INCLUDE sheetExists
+'#INCLUDE WorksheetExists
     Dim NewSheet As Worksheet
     If WorksheetExists(SheetName, TargetWorkbook) = True Then
         Set CreateOrSetSheet = TargetWorkbook.Sheets(SheetName)
